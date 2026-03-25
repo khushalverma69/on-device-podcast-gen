@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import type { ScriptLength } from '../types';
+import { setThemeMode as applyThemeMode, type ThemeMode } from '../constants/theme';
 
 const STORE_FILE = (FileSystem.documentDirectory ?? '') + 'settings-store.json';
 
@@ -61,12 +62,14 @@ type SettingsStoreState = {
   host2VoiceId?: string;
   scriptLength: ScriptLength;
   pauseMs: number;
+  themeMode: ThemeMode;
   hydrate: () => Promise<void>;
   setPreferredModelId: (value?: string) => Promise<void>;
   setHost1VoiceId: (value?: string) => Promise<void>;
   setHost2VoiceId: (value?: string) => Promise<void>;
   setScriptLength: (value: ScriptLength) => Promise<void>;
   setPauseMs: (value: number) => Promise<void>;
+  setThemeMode: (value: ThemeMode) => Promise<void>;
 };
 
 export const useSettingsStore = create<SettingsStoreState>((set) => ({
@@ -75,24 +78,29 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
   host2VoiceId:     undefined,
   scriptLength:     'normal',
   pauseMs:          400,
+  themeMode:        'light',
 
   hydrate: async () => {
-    const [preferredModelId, host1VoiceId, host2VoiceId, scriptLengthRaw, pauseRaw] =
+    const [preferredModelId, host1VoiceId, host2VoiceId, scriptLengthRaw, pauseRaw, themeModeRaw] =
       await Promise.all([
         getItem(key('preferredModelId')),
         getItem(key('host1VoiceId')),
         getItem(key('host2VoiceId')),
         getItem(key('scriptLength')),
         getItem(key('pauseMs')),
+        getItem(key('themeMode')),
       ]);
     const pauseParsed = parseNumber(pauseRaw);
+    const themeMode: ThemeMode = themeModeRaw === 'dark' ? 'dark' : 'light';
     set({
       preferredModelId: preferredModelId ?? undefined,
       host1VoiceId:     host1VoiceId ?? undefined,
       host2VoiceId:     host2VoiceId ?? undefined,
       scriptLength:     parseScriptLength(scriptLengthRaw),
       pauseMs:          pauseParsed != null ? Math.max(0, Math.round(pauseParsed)) : 400,
+      themeMode,
     });
+    applyThemeMode(themeMode);
   },
 
   setPreferredModelId: async (value) => {
@@ -122,5 +130,12 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
     const normalized = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 400;
     await setItem(key('pauseMs'), String(normalized));
     set({ pauseMs: normalized });
+  },
+
+  setThemeMode: async (value) => {
+    const normalized: ThemeMode = value === 'dark' ? 'dark' : 'light';
+    await setItem(key('themeMode'), normalized);
+    applyThemeMode(normalized);
+    set({ themeMode: normalized });
   },
 }));

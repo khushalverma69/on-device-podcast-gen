@@ -60,8 +60,8 @@ export default function SettingsScreen() {
   const downloaded    = useModelStore(s => s.downloaded);
   
   const { 
-    scriptLength, pauseMs, host1VoiceId, host2VoiceId,
-    setScriptLength, setPauseMs, setHost1VoiceId, setHost2VoiceId 
+    scriptLength, pauseMs, host1VoiceId, host2VoiceId, themeMode,
+    setScriptLength, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode 
   } = useSettingsStore();
   
   const clearLibrary = useLibraryStore(s => s.clearLibrary);
@@ -106,6 +106,22 @@ export default function SettingsScreen() {
         })),
         { text: 'Cancel', style: 'cancel' },
       ]
+    );
+  };
+
+
+  const handleThemeModePress = () => {
+    Alert.alert('Theme mode', 'Choose your preferred appearance', [
+      { text: 'Light', onPress: () => void setThemeMode('light') },
+      { text: 'Dark', onPress: () => void setThemeMode('dark') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleInfoPress = () => {
+    Alert.alert(
+      'How to use',
+      '1) Import URL/PDF\n2) Generate\n3) Open episode in Library\n4) Use Player controls\n5) Manage models/settings here.'
     );
   };
 
@@ -200,8 +216,17 @@ export default function SettingsScreen() {
         <Text style={s.sectionLabel}>APP</Text>
         <SettingCard>
           <SettingRow
+            label="Theme mode"
+            value={themeMode === 'dark' ? 'Dark' : 'Light'}
+            onPress={handleThemeModePress}
+          />
+          <SettingRow
+            label="How to use"
+            onPress={handleInfoPress}
+          />
+          <SettingRow
             label="Version"
-            value="1.0.0"
+            value="1.1.0"
           />
           <SettingRow
             label="Clear episode library"
@@ -228,7 +253,7 @@ const s = StyleSheet.create({
   body:         { paddingHorizontal: 16, paddingBottom: 40 },
   sectionLabel: { color: theme.textSecondary, fontSize: 10, fontWeight: '700',
                   letterSpacing: 2, marginTop: 24, marginBottom: 8, paddingHorizontal: 4 },
-  card:         { backgroundColor: theme.card, borderRadius: 18, overflow: 'hidden',
+  card:         { backgroundColor: theme.card, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: theme.border,
                   shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 },
   row:          { flexDirection: 'row', alignItems: 'center',

@@ -139,7 +139,7 @@ export default function HomeScreen() {
       }]}>
         <View>
           <Text style={s.eyebrow}>YOUR LIBRARY</Text>
-          <Text style={s.headerTitle}>Private{'\n'}Podcast</Text>
+          <Text style={s.headerTitle}>PodCraft{'\n'}Private</Text>
         </View>
         <Animated.View style={[s.countWrap, {
           transform: [{ translateY: countTranslate }],

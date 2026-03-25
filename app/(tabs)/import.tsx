@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { router } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
 import {
   View, Text, TextInput, Pressable,
   StyleSheet, ScrollView, Alert, Animated,
@@ -58,6 +59,31 @@ export default function ImportScreen() {
     ).start();
   }, []);
 
+
+  async function handlePickPdf() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const file = result.assets[0];
+    router.push({
+      pathname: '/generate',
+      params: {
+        source: file.uri,
+        sourceType: 'pdf',
+        topic: file.name?.replace(/\.pdf$/i, '') || 'PDF Episode',
+      },
+    });
+  }
+
+  function handleCameraSoon() {
+    Alert.alert('Camera mode', 'Camera capture flow is coming next. Use URL or PDF for now.');
+  }
+
   function handleGenerate() {
     if (!url.trim()) {
       Alert.alert('No source', 'Please enter a URL or pick an example');
@@ -101,6 +127,18 @@ export default function ImportScreen() {
                 </Pressable>
               )}
             </View>
+          </View>
+
+
+          <View style={s.optionRow}>
+            <Pressable style={s.optionBtn} onPress={handlePickPdf}>
+              <Text style={s.optionEmoji}>📄</Text>
+              <Text style={s.optionTxt}>Pick PDF</Text>
+            </Pressable>
+            <Pressable style={s.optionBtn} onPress={handleCameraSoon}>
+              <Text style={s.optionEmoji}>📷</Text>
+              <Text style={s.optionTxt}>Use Camera</Text>
+            </Pressable>
           </View>
 
           {/* Examples */}
@@ -168,7 +206,7 @@ const s = StyleSheet.create({
   title:            { color: theme.textPrimary, fontSize: 36, fontWeight: '800', marginBottom: 4 },
   subtitle:         { color: theme.textSecondary, fontSize: 15 },
   body:             { paddingHorizontal: 16, gap: 14 },
-  inputCard:        { backgroundColor: theme.card, borderRadius: 18, padding: 18,
+  inputCard:        { backgroundColor: theme.card, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: theme.border,
                       shadowColor: theme.shadowColor, shadowOffset: { width: 0, height: 2 },
                       shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 },
   inputLabel:       { color: theme.primary, fontSize: 10, fontWeight: '700',
@@ -181,11 +219,16 @@ const s = StyleSheet.create({
   input:            { flex: 1, color: theme.textPrimary, fontSize: 14, paddingVertical: 12 },
   clearBtn:         { padding: 8 },
   clearBtnTxt:      { color: theme.textTertiary, fontSize: 14 },
+  optionRow:        { flexDirection: 'row', gap: 10 },
+  optionBtn:        { flex: 1, backgroundColor: theme.card, borderRadius: 14, borderWidth: 1,
+                      borderColor: theme.border, paddingVertical: 12, alignItems: 'center', gap: 4 },
+  optionEmoji:      { fontSize: 18 },
+  optionTxt:        { color: theme.textPrimary, fontWeight: '600' },
   sectionLabel:     { color: theme.textSecondary, fontSize: 10, fontWeight: '700',
                       letterSpacing: 2, paddingHorizontal: 4 },
   examplesGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   exampleWrap:      { width: '48%' },
-  exampleCard:      { backgroundColor: theme.card, borderRadius: 16,
+  exampleCard:      { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.border,
                       padding: 16, alignItems: 'center',
                       shadowColor: theme.shadowColor, shadowOffset: { width: 0, height: 2 },
                       shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 },

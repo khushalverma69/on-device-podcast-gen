@@ -25,7 +25,7 @@ async function ensurePlayer(): Promise<void> {
   await TrackPlayer.setupPlayer();
   await TrackPlayer.updateOptions({
     android: {
-      appKilledPlaybackBehavior: AppKilledPlaybackBehavior.PausePlayback,
+      appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
     },
     capabilities: [
       Capability.Play,
@@ -36,6 +36,7 @@ async function ensurePlayer(): Promise<void> {
       Capability.Stop,
     ],
     compactCapabilities: [Capability.Play, Capability.Pause],
+    notificationCapabilities: [Capability.Play, Capability.Pause, Capability.SeekTo],
   });
 
   isSetup = true;

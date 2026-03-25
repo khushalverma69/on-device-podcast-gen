@@ -58,6 +58,8 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: theme.background },
         }}
       >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="info" options={{ title: 'How to use' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="generate" options={{ title: 'Generate' }} />
         <Stack.Screen name="episode/[id]" options={{ title: 'Episode' }} />
