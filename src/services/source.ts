@@ -6,6 +6,7 @@ import {
   stripHtmlToText,
 } from '../domain/textProcessing';
 import type { SourceType } from '../types';
+import { trackError, trackWarn } from './telemetry';
 
 function decodeBase64(input: string): string {
   try {
@@ -141,13 +142,18 @@ export async function runImageOcr(imageUri: string): Promise<string> {
         const data = await res.json();
         const parsed = data?.ParsedResults?.[0]?.ParsedText as string | undefined;
         if (parsed?.trim()) return normalizeSourceText(parsed);
+        trackWarn('ocr.empty_result', { attempt: attempt + 1 });
+      } else {
+        trackWarn('ocr.http_error', { attempt: attempt + 1, status: res.status });
       }
       if (attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
       }
     }
+    trackError('ocr.exhausted', { imageUri });
     return '';
   } catch {
+    trackError('ocr.exception', { imageUri });
     return '';
   }
 }
