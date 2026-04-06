@@ -32,3 +32,7 @@ export function trackError(event: string, details?: Record<string, unknown>): vo
 export function readTelemetry(): TelemetryEntry[] {
   return [...store];
 }
+
+export function clearTelemetry(): void {
+  store.splice(0, store.length);
+}

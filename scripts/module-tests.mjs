@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 
+import * as generationRun from '../.tmp-tests/domain/generationRun.js';
+import * as libraryIntegrity from '../.tmp-tests/domain/libraryIntegrity.js';
+import * as playerRecovery from '../.tmp-tests/domain/playerRecovery.js';
+import * as sourceValidation from '../.tmp-tests/domain/sourceValidation.js';
 import * as text from '../.tmp-tests/domain/textProcessing.js';
+import * as telemetry from '../.tmp-tests/services/telemetry.js';
 import * as settings from '../.tmp-tests/stores/settingsParsing.js';
 
 const cleaned = text.stripHtmlToText('<h1>Hello</h1><script>x()</script><p>World</p>');
@@ -23,5 +28,111 @@ assert.equal(settings.parseThemeMode('dark'), 'dark');
 assert.equal(settings.parseThemeMode('unknown'), 'light');
 assert.equal(settings.parseBoolean(undefined, true), true);
 assert.equal(settings.parseBoolean('false', true), false);
+
+assert.deepEqual(
+  generationRun.normalizeGenerationRunInput({ topic: '  AI  ', sourceType: undefined }),
+  { topic: 'AI', source: '', sourceType: 'url', sourceText: '' }
+);
+assert.equal(
+  generationRun.getGenerationEpisodeTitle({ source: 'file:///docs/notes.pdf' }),
+  'notes.pdf'
+);
+assert.equal(
+  generationRun.shouldAutoResumePendingRun(
+    { topic: '', source: '', sourceType: 'url', sourceText: '' },
+    { topic: 'Recovered', source: 'file:///draft.pdf', sourceType: 'pdf', stage: 1, updatedAt: Date.now() }
+  ),
+  true
+);
+assert.equal(
+  generationRun.shouldAutoResumePendingRun(
+    { topic: '', source: '', sourceType: 'url', sourceText: '' },
+    { topic: 'Recovered', source: 'file:///draft.pdf', sourceType: 'pdf', stage: 1, updatedAt: Date.now(), lastError: 'Bad PDF' }
+  ),
+  false
+);
+assert.equal(
+  generationRun.shouldAutoResumePendingRun(
+    { topic: 'Fresh run', source: '', sourceType: 'url', sourceText: '' },
+    { topic: 'Recovered', source: 'file:///draft.pdf', sourceType: 'pdf', stage: 1, updatedAt: Date.now() }
+  ),
+  false
+);
+assert.equal(sourceValidation.isMeaningfulSourceText('Too short to use.'), false);
+assert.equal(
+  sourceValidation.isMeaningfulSourceText(
+    'This article has enough useful words to describe a topic in a way that gives the podcast generator real material to work from during the script writing stage.'
+  ),
+  true
+);
+assert.match(
+  sourceValidation.getSourceValidationMessage({ sourceType: 'pdf' }),
+  /PDF/i
+);
+assert.equal(
+  sourceValidation.validateSourceText({
+    sourceType: 'camera',
+    sourceText: 'Tiny note',
+  })?.includes('camera capture'),
+  true
+);
+assert.equal(
+  playerRecovery.pickRestorableEpisodeId(
+    [{ id: 'ep-1' }, { id: 'ep-2' }, { id: 'ep-3' }],
+    'ep-2',
+    ['ep-1', 'ep-2']
+  ),
+  'ep-2'
+);
+assert.equal(
+  playerRecovery.pickRestorableEpisodeId(
+    [{ id: 'ep-1' }, { id: 'ep-2' }, { id: 'ep-3' }],
+    'ep-3',
+    ['ep-2']
+  ),
+  'ep-2'
+);
+assert.deepEqual(
+  playerRecovery.filterEpisodeIds(['ep-1', 'ep-2', 'ep-1'], ['ep-2', 'ep-3']),
+  ['ep-2']
+);
+assert.deepEqual(
+  playerRecovery.filterEpisodeMap({ 'ep-1': 10, 'ep-2': 20 }, ['ep-2']),
+  { 'ep-2': 20 }
+);
+assert.equal(
+  playerRecovery.getNextQueuedEpisodeId(['ep-1', 'ep-2', 'ep-3'], 0, ['ep-2', 'ep-3']),
+  'ep-2'
+);
+assert.equal(
+  playerRecovery.getNextQueuedEpisodeId(['ep-1', 'ep-2'], 1, ['ep-1', 'ep-2']),
+  null
+);
+assert.equal(playerRecovery.getCompletedPosition(91.2, 93), 93);
+assert.equal(playerRecovery.getCompletedPosition(91.2, 0), 91);
+assert.deepEqual(
+  libraryIntegrity.summarizeBrokenEpisodes([
+    { ok: true, normalizedUri: 'file:///ok.wav' },
+    { ok: false, code: 'missing_file', message: 'Missing' },
+    { ok: false, code: 'empty_file', message: 'Empty' },
+    { ok: false, code: 'missing_path', message: 'No path' },
+  ]),
+  {
+    brokenCount: 3,
+    missingFileCount: 1,
+    emptyFileCount: 1,
+    missingPathCount: 1,
+  }
+);
+telemetry.clearTelemetry();
+telemetry.trackEvent('pipeline.start', { sourceType: 'url' });
+telemetry.trackWarn('source.validation_failed', { sourceType: 'pdf' });
+telemetry.trackError('player.audio_missing', { episodeId: 'ep-1' });
+const telemetryEntries = telemetry.readTelemetry();
+assert.equal(telemetryEntries.length, 3);
+assert.equal(telemetryEntries[0].event, 'pipeline.start');
+assert.equal(telemetryEntries[2].level, 'error');
+telemetry.clearTelemetry();
+assert.equal(telemetry.readTelemetry().length, 0);
 
 console.log('module-tests: ok');

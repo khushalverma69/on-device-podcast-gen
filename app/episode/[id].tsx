@@ -1,5 +1,6 @@
 import { useLocalSearchParams, router } from 'expo-router';
 import { View, Text, Pressable, StyleSheet, ScrollView, Alert } from 'react-native';
+import { inspectEpisodeAudio } from '../../src/services/player';
 import { useLibraryStore } from '../../src/stores/libraryStore';
 import { usePlayerStore } from '../../src/stores/playerStore';
 
@@ -16,7 +17,27 @@ export default function EpisodeDetailScreen() {
     );
   }
 
-  function handlePlay() {
+  async function handlePlay() {
+    const audio = await inspectEpisodeAudio({
+      id: episode!.id,
+      title: episode!.title,
+      mp3Path: episode!.mp3Path,
+    });
+    if (!audio.ok) {
+      Alert.alert('Audio unavailable', audio.message, [
+        { text: 'OK', style: 'cancel' },
+        {
+          text: 'Delete episode',
+          style: 'destructive',
+          onPress: () => {
+            void useLibraryStore.getState().removeEpisode(episode!.id);
+            router.back();
+          },
+        },
+      ]);
+      return;
+    }
+
     setEpisode({
       id:              episode!.id,
       title:           episode!.title,
@@ -63,7 +84,7 @@ export default function EpisodeDetailScreen() {
       <ScrollView contentContainerStyle={s.body}>
 
         <View style={s.actionRow}>
-          <Pressable style={s.playBtn} onPress={handlePlay}>
+          <Pressable style={s.playBtn} onPress={() => void handlePlay()}>
             <Text style={s.playBtnTxt}>▶  Play</Text>
           </Pressable>
           <Pressable style={s.deleteBtn} onPress={handleDelete}>

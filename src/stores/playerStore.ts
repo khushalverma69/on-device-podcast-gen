@@ -3,7 +3,15 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
+  filterEpisodeIds,
+  filterEpisodeMap,
+  getCompletedPosition,
+  getNextQueuedEpisodeId,
+  pickRestorableEpisodeId,
+} from '../domain/playerRecovery';
+import {
   getPlaybackSnapshot,
+  inspectEpisodeAudio,
   pausePlayback,
   playEpisode,
   seekBy as seekByPlayback,
@@ -66,16 +74,22 @@ type PlayerState = {
   positionSeconds:  number;
   durationSeconds:  number;
   speed:            number;
+  playbackError?:   string;
   lastEpisodeId?:   string;
   resumeByEpisode:  Record<string, number>;
   bookmarks:        Record<string, EpisodeBookmark[]>;
   queueEpisodeIds:  string[];
   queueIndex:       number;
+  clearEpisodeSelection: () => void;
+  clearPlaybackError: () => void;
   play:             (episodeId: string) => Promise<void>;
   pause:            () => Promise<void>;
   setSpeed:         (speed: number) => Promise<void>;
   seekBy:           (offset: number) => Promise<void>;
   syncProgress:     () => Promise<void>;
+  restoreFromLibrary: (episodes: Episode[]) => Promise<void>;
+  validateCurrentEpisode: () => Promise<boolean>;
+  handlePlaybackEnded: (episodes: Episode[], position: number) => Promise<void>;
   setProgress:      (position: number, duration: number) => void;
   setEpisode:       (episode: Episode) => void;
   addBookmark:      () => void;
@@ -94,11 +108,24 @@ export const usePlayerStore = create<PlayerState>()(
       positionSeconds: 0,
       durationSeconds: 0,
       speed:           1,
+      playbackError:   undefined,
       lastEpisodeId:   undefined,
       resumeByEpisode: {},
       bookmarks:       {},
       queueEpisodeIds: [],
       queueIndex:      -1,
+
+      clearEpisodeSelection: () =>
+        set({
+          currentEpisode: null,
+          isPlaying: false,
+          positionSeconds: 0,
+          durationSeconds: 0,
+          playbackError: undefined,
+          queueIndex: -1,
+        }),
+
+      clearPlaybackError: () => set({ playbackError: undefined }),
 
       play: async (episodeId: string) => {
         const { currentEpisode } = get();
@@ -107,16 +134,25 @@ export const usePlayerStore = create<PlayerState>()(
         }
 
         try {
+          const audio = await inspectEpisodeAudio(currentEpisode);
+          if (!audio.ok) {
+            set({ isPlaying: false, playbackError: audio.message });
+            return;
+          }
           await playEpisode(currentEpisode);
           const snap = await getPlaybackSnapshot();
           set({
             isPlaying: snap.isPlaying,
             positionSeconds: snap.position,
             durationSeconds: snap.duration > 0 ? snap.duration : (currentEpisode.durationSeconds ?? 0),
+            playbackError: undefined,
           });
         } catch (e) {
           console.warn('[playerStore] play failed', e);
-          set({ isPlaying: false });
+          set({
+            isPlaying: false,
+            playbackError: e instanceof Error ? e.message : 'Playback failed.',
+          });
         }
       },
 
@@ -173,6 +209,109 @@ export const usePlayerStore = create<PlayerState>()(
         }
       },
 
+      restoreFromLibrary: async (episodes) => {
+        const episodeIds = episodes.map((episode) => episode.id);
+        const playableEpisodeIds: string[] = [];
+        for (const episode of episodes) {
+          const audio = await inspectEpisodeAudio(episode);
+          if (audio.ok) playableEpisodeIds.push(episode.id);
+        }
+
+        const nextEpisodeId = pickRestorableEpisodeId(episodes, get().lastEpisodeId, playableEpisodeIds);
+        const nextEpisode = nextEpisodeId
+          ? episodes.find((episode) => episode.id === nextEpisodeId) ?? null
+          : null;
+        const nextQueue = filterEpisodeIds(get().queueEpisodeIds, episodeIds);
+        const nextResume = filterEpisodeMap(get().resumeByEpisode, episodeIds);
+        const nextBookmarks = normalizeBookmarks(filterEpisodeMap(get().bookmarks, episodeIds));
+
+        set(() => ({
+          currentEpisode: nextEpisode
+            ? {
+                id: nextEpisode.id,
+                title: nextEpisode.title,
+                mp3Path: nextEpisode.mp3Path,
+                durationSeconds: nextEpisode.durationSeconds ?? 0,
+                modelUsed: nextEpisode.modelUsed ?? undefined,
+                turns: nextEpisode.turns ?? 0,
+                createdAt: nextEpisode.createdAt,
+              }
+            : null,
+          lastEpisodeId: nextEpisodeId ?? undefined,
+          positionSeconds: nextEpisodeId ? nextResume[nextEpisodeId] ?? 0 : 0,
+          durationSeconds: nextEpisode?.durationSeconds ?? 0,
+          isPlaying: false,
+          playbackError: nextEpisodeId ? undefined : get().lastEpisodeId ? 'Last episode audio is no longer available on this device.' : undefined,
+          resumeByEpisode: nextResume,
+          bookmarks: nextBookmarks,
+          queueEpisodeIds: nextQueue,
+          queueIndex: nextEpisodeId ? nextQueue.findIndex((id) => id === nextEpisodeId) : -1,
+        }));
+      },
+
+      validateCurrentEpisode: async () => {
+        const currentEpisode = get().currentEpisode;
+        if (!currentEpisode) {
+          set({ playbackError: undefined });
+          return false;
+        }
+
+        const audio = await inspectEpisodeAudio(currentEpisode);
+        if (!audio.ok) {
+          set({ isPlaying: false, playbackError: audio.message });
+          return false;
+        }
+
+        set({ playbackError: undefined });
+        return true;
+      },
+
+      handlePlaybackEnded: async (episodes, position) => {
+        const state = get();
+        const currentEpisode = state.currentEpisode;
+        if (!currentEpisode) return;
+
+        const completedPosition = getCompletedPosition(position, state.durationSeconds || currentEpisode.durationSeconds);
+        const availableEpisodeIds = episodes.map((episode) => episode.id);
+        const nextEpisodeId = getNextQueuedEpisodeId(state.queueEpisodeIds, state.queueIndex, availableEpisodeIds);
+        const nextEpisode = nextEpisodeId
+          ? episodes.find((episode) => episode.id === nextEpisodeId) ?? null
+          : null;
+
+        set((prev) => ({
+          isPlaying: false,
+          positionSeconds: completedPosition,
+          durationSeconds: prev.durationSeconds || currentEpisode.durationSeconds || completedPosition,
+          resumeByEpisode: {
+            ...prev.resumeByEpisode,
+            [currentEpisode.id]: completedPosition,
+          },
+        }));
+
+        if (!nextEpisode) {
+          return;
+        }
+
+        set((prev) => ({
+          currentEpisode: {
+            id: nextEpisode.id,
+            title: nextEpisode.title,
+            mp3Path: nextEpisode.mp3Path,
+            durationSeconds: nextEpisode.durationSeconds ?? 0,
+            modelUsed: nextEpisode.modelUsed ?? undefined,
+            turns: nextEpisode.turns ?? 0,
+            createdAt: nextEpisode.createdAt,
+          },
+          lastEpisodeId: nextEpisode.id,
+          queueIndex: prev.queueEpisodeIds.findIndex((id) => id === nextEpisode.id),
+          positionSeconds: prev.resumeByEpisode[nextEpisode.id] ?? 0,
+          durationSeconds: nextEpisode.durationSeconds ?? 0,
+          playbackError: undefined,
+        }));
+
+        await get().play(nextEpisode.id);
+      },
+
       setProgress: (position, duration) =>
         set({ positionSeconds: position, durationSeconds: duration }),
 
@@ -184,6 +323,7 @@ export const usePlayerStore = create<PlayerState>()(
           positionSeconds: state.resumeByEpisode[episode.id] ?? 0,
           durationSeconds: episode.durationSeconds ?? 0,
           isPlaying: false,
+          playbackError: undefined,
         })),
 
       addBookmark: () =>

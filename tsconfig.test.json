@@ -10,7 +10,13 @@
     "noEmit": false
   },
   "include": [
+    "src/domain/libraryIntegrity.ts",
+    "src/domain/playerRecovery.ts",
     "src/domain/textProcessing.ts",
-    "src/stores/settingsParsing.ts"
+    "src/domain/generationRun.ts",
+    "src/domain/sourceValidation.ts",
+    "src/services/telemetry.ts",
+    "src/stores/settingsParsing.ts",
+    "src/stores/pipelineRunStore.ts"
   ]
 }
