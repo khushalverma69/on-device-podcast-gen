@@ -12,6 +12,7 @@ import { useSettingsStore } from '../src/stores/settingsStore';
 export default function RootLayout() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
+  const themeMode = useSettingsStore((st) => st.themeMode);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,8 +51,8 @@ export default function RootLayout() {
 
   return (
     <>
-      <StatusBar style="light" />
-      <Stack
+      <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
+      <Stack key={themeMode}
         screenOptions={{
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: '#FFFFFF',
@@ -61,6 +62,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="info" options={{ title: 'How to use' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="camera" options={{ title: 'Camera' }} />
         <Stack.Screen name="generate" options={{ title: 'Generate' }} />
         <Stack.Screen name="episode/[id]" options={{ title: 'Episode' }} />
       </Stack>

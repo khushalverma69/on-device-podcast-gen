@@ -36,10 +36,11 @@ function targetTurnCount(length: ScriptLength): number {
   return 20;
 }
 
-function buildPrompt(topic: string, length: ScriptLength): string {
+function buildPrompt(topic: string, length: ScriptLength, sourceContext?: string): string {
   const turns = targetTurnCount(length);
   return [
     `Topic: ${topic}`,
+    sourceContext ? `Source Material: ${sourceContext}` : 'Source Material: (none provided)',
     `Write a 2-host podcast conversation with exactly ${turns} turns.`,
     'Alternate speakers HOST1 and HOST2.',
     'Output only strict JSON as an array of objects: [{"speaker":"HOST1|HOST2","text":"..."}].',
@@ -135,7 +136,7 @@ async function getContext(): Promise<LlamaContext> {
   return ctx;
 }
 
-export async function generatePodcastScript(topic: string): Promise<ScriptTurn[]> {
+export async function generatePodcastScript(topic: string, sourceContext?: string): Promise<ScriptTurn[]> {
   const ctx = await getContext();
   const settings = useSettingsStore.getState();
 
@@ -147,7 +148,7 @@ export async function generatePodcastScript(topic: string): Promise<ScriptTurn[]
       },
       {
         role: 'user',
-        content: buildPrompt(topic, settings.scriptLength),
+        content: buildPrompt(topic, settings.scriptLength, sourceContext),
       },
     ],
     n_predict: 1200,

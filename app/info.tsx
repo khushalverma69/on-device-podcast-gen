@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../src/constants/theme';
+import { useSettingsStore } from '../src/stores/settingsStore';
 
 const STEPS = [
   'Tap Import to add a URL, pick a PDF, or use quick examples.',
@@ -13,6 +14,7 @@ const STEPS = [
 
 export default function InfoScreen() {
   const reveal = useRef(STEPS.map(() => new Animated.Value(0))).current;
+  const setOnboardingSeen = useSettingsStore((st) => st.setOnboardingSeen);
 
   useEffect(() => {
     Animated.stagger(
@@ -54,7 +56,7 @@ export default function InfoScreen() {
           <Text style={s.tipTxt}>Your existing library and settings are preserved locally on-device.</Text>
         </View>
 
-        <Pressable style={s.button} onPress={() => router.replace('/(tabs)')}>
+        <Pressable style={s.button} onPress={() => { void setOnboardingSeen(true); router.replace('/(tabs)'); }}>
           <Text style={s.buttonTxt}>Go to app</Text>
         </Pressable>
       </ScrollView>

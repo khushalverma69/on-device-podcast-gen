@@ -63,6 +63,8 @@ type SettingsStoreState = {
   scriptLength: ScriptLength;
   pauseMs: number;
   themeMode: ThemeMode;
+  onboardingAutoAdvance: boolean;
+  onboardingSeen: boolean;
   hydrate: () => Promise<void>;
   setPreferredModelId: (value?: string) => Promise<void>;
   setHost1VoiceId: (value?: string) => Promise<void>;
@@ -70,6 +72,8 @@ type SettingsStoreState = {
   setScriptLength: (value: ScriptLength) => Promise<void>;
   setPauseMs: (value: number) => Promise<void>;
   setThemeMode: (value: ThemeMode) => Promise<void>;
+  setOnboardingAutoAdvance: (value: boolean) => Promise<void>;
+  setOnboardingSeen: (value: boolean) => Promise<void>;
 };
 
 export const useSettingsStore = create<SettingsStoreState>((set) => ({
@@ -79,9 +83,11 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
   scriptLength:     'normal',
   pauseMs:          400,
   themeMode:        'light',
+  onboardingAutoAdvance: true,
+  onboardingSeen: false,
 
   hydrate: async () => {
-    const [preferredModelId, host1VoiceId, host2VoiceId, scriptLengthRaw, pauseRaw, themeModeRaw] =
+    const [preferredModelId, host1VoiceId, host2VoiceId, scriptLengthRaw, pauseRaw, themeModeRaw, onboardingAutoRaw, onboardingSeenRaw] =
       await Promise.all([
         getItem(key('preferredModelId')),
         getItem(key('host1VoiceId')),
@@ -89,9 +95,13 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
         getItem(key('scriptLength')),
         getItem(key('pauseMs')),
         getItem(key('themeMode')),
+        getItem(key('onboardingAutoAdvance')),
+        getItem(key('onboardingSeen')),
       ]);
     const pauseParsed = parseNumber(pauseRaw);
     const themeMode: ThemeMode = themeModeRaw === 'dark' ? 'dark' : 'light';
+    const onboardingAutoAdvance = onboardingAutoRaw !== 'false';
+    const onboardingSeen = onboardingSeenRaw === 'true';
     set({
       preferredModelId: preferredModelId ?? undefined,
       host1VoiceId:     host1VoiceId ?? undefined,
@@ -99,6 +109,8 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
       scriptLength:     parseScriptLength(scriptLengthRaw),
       pauseMs:          pauseParsed != null ? Math.max(0, Math.round(pauseParsed)) : 400,
       themeMode,
+      onboardingAutoAdvance,
+      onboardingSeen,
     });
     applyThemeMode(themeMode);
   },
@@ -137,5 +149,15 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
     await setItem(key('themeMode'), normalized);
     applyThemeMode(normalized);
     set({ themeMode: normalized });
+  },
+
+  setOnboardingAutoAdvance: async (value) => {
+    await setItem(key('onboardingAutoAdvance'), value ? 'true' : 'false');
+    set({ onboardingAutoAdvance: value });
+  },
+
+  setOnboardingSeen: async (value) => {
+    await setItem(key('onboardingSeen'), value ? 'true' : 'false');
+    set({ onboardingSeen: value });
   },
 }));

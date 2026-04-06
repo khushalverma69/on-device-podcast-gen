@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../src/constants/theme';
+import { useSettingsStore } from '../src/stores/settingsStore';
 
 export default function WelcomeScreen() {
   const logoScale = useRef(new Animated.Value(0.82)).current;
@@ -10,6 +11,9 @@ export default function WelcomeScreen() {
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const cardSlide = useRef(new Animated.Value(24)).current;
   const pulse = useRef(new Animated.Value(0.25)).current;
+  const onboardingAutoAdvance = useSettingsStore((st) => st.onboardingAutoAdvance);
+  const onboardingSeen = useSettingsStore((st) => st.onboardingSeen);
+  const setOnboardingSeen = useSettingsStore((st) => st.setOnboardingSeen);
 
   useEffect(() => {
     Animated.parallel([
@@ -47,7 +51,23 @@ export default function WelcomeScreen() {
         Animated.timing(pulse, { toValue: 0.25, duration: 1200, useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+
+    if (onboardingSeen) {
+      router.replace('/(tabs)');
+      return;
+    }
+
+    const timer = onboardingAutoAdvance
+      ? setTimeout(() => {
+          void setOnboardingSeen(true);
+          router.replace('/(tabs)');
+        }, 2300)
+      : null;
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [onboardingAutoAdvance, onboardingSeen]);
 
   return (
     <View style={s.screen}>
@@ -61,7 +81,7 @@ export default function WelcomeScreen() {
         <Text style={s.badge}>ON-DEVICE PODCASTS</Text>
         <Text style={s.subtitle}>Create private podcasts from links and PDFs with smooth local playback.</Text>
 
-        <Pressable style={s.primaryBtn} onPress={() => router.replace('/(tabs)')}>
+        <Pressable style={s.primaryBtn} onPress={() => { void setOnboardingSeen(true); router.replace('/(tabs)'); }}>
           <Text style={s.primaryBtnTxt}>Enter Studio</Text>
         </Pressable>
 

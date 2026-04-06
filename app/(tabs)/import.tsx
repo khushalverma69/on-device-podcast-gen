@@ -80,8 +80,8 @@ export default function ImportScreen() {
     });
   }
 
-  function handleCameraSoon() {
-    Alert.alert('Camera mode', 'Camera capture flow is coming next. Use URL or PDF for now.');
+  function handleCameraOpen() {
+    router.push('/camera');
   }
 
   function handleGenerate() {
@@ -135,7 +135,7 @@ export default function ImportScreen() {
               <Text style={s.optionEmoji}>📄</Text>
               <Text style={s.optionTxt}>Pick PDF</Text>
             </Pressable>
-            <Pressable style={s.optionBtn} onPress={handleCameraSoon}>
+            <Pressable style={s.optionBtn} onPress={handleCameraOpen}>
               <Text style={s.optionEmoji}>📷</Text>
               <Text style={s.optionTxt}>Use Camera</Text>
             </Pressable>

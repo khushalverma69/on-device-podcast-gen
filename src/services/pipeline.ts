@@ -1,8 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { generatePodcastScript } from './llm';
+import { buildSourceContext } from './source';
 import { synthesizeScriptToWav } from './tts';
 import { useModelStore } from '../stores/modelStore';
+import type { SourceType } from '../types';
 
 export interface PipelineCallbacks {
   onStageChange: (stage: number, label: string) => void;
@@ -25,15 +27,21 @@ function generateId(): string {
 }
 
 export async function runPipeline(
-  topic: string,
+  input: {
+    topic?: string;
+    source?: string;
+    sourceType?: SourceType | string;
+    sourceText?: string;
+  },
   callbacks: PipelineCallbacks,
 ): Promise<void> {
   try {
     callbacks.onStageChange(0, 'Reading document...');
+    const source = await buildSourceContext(input);
     await sleep(250);
 
     callbacks.onStageChange(1, 'Writing script...');
-    const turns = await generatePodcastScript(topic);
+    const turns = await generatePodcastScript(source.inferredTopic, source.sourceContext);
     for (const turn of turns) {
       callbacks.onTurn(turn.speaker, turn.text);
       await sleep(40);

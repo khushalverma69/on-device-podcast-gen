@@ -113,8 +113,8 @@ function TurnBubble({ turn, index }: { turn: Turn; index: number }) {
 }
 
 export default function GenerateScreen() {
-  const { source, sourceType, topic } = useLocalSearchParams<{
-    source: string; sourceType: string; topic: string;
+  const { source, sourceType, topic, sourceText } = useLocalSearchParams<{
+    source: string; sourceType: string; topic: string; sourceText?: string;
   }>();
 
   const [currentStage, setCurrentStage] = useState(-1);
@@ -145,7 +145,12 @@ export default function GenerateScreen() {
 
   useEffect(() => {
     setIsGenerating(true);
-    runPipeline(topic || 'Podcast Episode', {
+    runPipeline({
+      topic: topic || 'Podcast Episode',
+      source: source || '',
+      sourceType: sourceType || 'url',
+      sourceText: sourceText || '',
+    }, {
       onStageChange: (stage) => setCurrentStage(stage),
       onTurn: (speaker, text) => {
         const newTurn = { speaker, text };

@@ -60,8 +60,8 @@ export default function SettingsScreen() {
   const downloaded    = useModelStore(s => s.downloaded);
   
   const { 
-    scriptLength, pauseMs, host1VoiceId, host2VoiceId, themeMode,
-    setScriptLength, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode 
+    scriptLength, pauseMs, host1VoiceId, host2VoiceId, themeMode, onboardingAutoAdvance,
+    setScriptLength, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode, setOnboardingAutoAdvance 
   } = useSettingsStore();
   
   const clearLibrary = useLibraryStore(s => s.clearLibrary);
@@ -114,6 +114,15 @@ export default function SettingsScreen() {
     Alert.alert('Theme mode', 'Choose your preferred appearance', [
       { text: 'Light', onPress: () => void setThemeMode('light') },
       { text: 'Dark', onPress: () => void setThemeMode('dark') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+
+  const handleOnboardingAutoAdvance = () => {
+    Alert.alert('Splash auto-advance', 'Automatically enter app after splash animation?', [
+      { text: 'Enabled', onPress: () => void setOnboardingAutoAdvance(true) },
+      { text: 'Disabled', onPress: () => void setOnboardingAutoAdvance(false) },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
@@ -219,6 +228,11 @@ export default function SettingsScreen() {
             label="Theme mode"
             value={themeMode === 'dark' ? 'Dark' : 'Light'}
             onPress={handleThemeModePress}
+          />
+          <SettingRow
+            label="Splash auto-advance"
+            value={onboardingAutoAdvance ? 'Enabled' : 'Disabled'}
+            onPress={handleOnboardingAutoAdvance}
           />
           <SettingRow
             label="How to use"
