@@ -8,6 +8,7 @@ import { useLibraryStore } from '../../src/stores/libraryStore';
 import { usePlayerStore } from '../../src/stores/playerStore';
 import { theme } from '../../src/constants/theme';
 import { uiSpacing, uiType } from '../../src/constants/ui';
+import { ScreenStateCard } from '../../src/components';
 
 const { width } = Dimensions.get('window');
 const HEADER_HEIGHT = 160;
@@ -215,12 +216,13 @@ export default function HomeScreen() {
           </View>
         ) : episodes.length === 0 ? (
           <View style={s.empty}>
-            <PulsingOrb />
-            <Text style={s.emptyTitle}>No episodes yet</Text>
-            <Text style={s.emptyBody}>
-              Import any article or document to generate your first private podcast episode
-            </Text>
-            <GlowButton label="Import document" onPress={() => router.push('/import')} />
+            <ScreenStateCard
+              icon="🎙"
+              title="No episodes yet"
+              body="Import any article or document to generate your first private podcast episode."
+              actionLabel="Import document"
+              onPressAction={() => router.push('/import')}
+            />
           </View>
         ) : (
           <View style={s.list}>
@@ -358,9 +360,6 @@ const s = StyleSheet.create({
                   borderWidth: 1.5, borderColor: theme.primary + '60',
                   alignItems: 'center', justifyContent: 'center' },
   orbIcon:      { fontSize: 32 },
-  emptyTitle:   { color: theme.textPrimary, fontSize: uiType.title, fontWeight: '800', marginBottom: 10 },
-  emptyBody:    { color: theme.textSecondary, fontSize: uiType.body, textAlign: 'center',
-                  lineHeight: 22, marginBottom: 32 },
   glowBtn:      { borderRadius: 16, overflow: 'visible', alignItems: 'center',
                   justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 32,
                   backgroundColor: theme.primary },

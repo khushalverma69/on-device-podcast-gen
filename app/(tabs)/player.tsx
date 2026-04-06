@@ -7,6 +7,7 @@ import { usePlayerStore } from '../../src/stores/playerStore';
 import { useLibraryStore } from '../../src/stores/libraryStore';
 import { theme } from '../../src/constants/theme';
 import { uiSpacing, uiType } from '../../src/constants/ui';
+import { ScreenStateCard } from '../../src/components';
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 const BAR_COUNT = 28;
@@ -146,13 +147,11 @@ export default function PlayerScreen() {
           <Text style={s.eyebrow}>NOW PLAYING</Text>
           <Text style={s.title}>Player</Text>
         </View>
-        <View style={s.empty}>
-          <View style={s.emptyOrb}>
-            <Text style={s.emptyIcon}>🎧</Text>
-          </View>
-          <Text style={s.emptyTitle}>Nothing playing</Text>
-          <Text style={s.emptyBody}>Open an episode and tap Play to listen here</Text>
-        </View>
+        <ScreenStateCard
+          icon="🎧"
+          title="Nothing playing"
+          body="Open an episode and tap Play to listen here."
+        />
       </Animated.View>
     );
   }
@@ -343,14 +342,6 @@ const s = StyleSheet.create({
   eyebrow:      { color: theme.primary, fontSize: 10, fontWeight: '700', letterSpacing: 2.5, marginBottom: 6 },
   title:        { color: theme.textPrimary, fontSize: uiType.hero, fontWeight: '800' },
   body:         { paddingHorizontal: uiSpacing.lg, paddingTop: uiSpacing.xs, paddingBottom: 60, alignItems: 'center' },
-  empty:        { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 48 },
-  emptyOrb:     { width: 100, height: 100, borderRadius: 50,
-                  backgroundColor: theme.primaryLight,
-                  borderWidth: 1.5, borderColor: theme.primary + '40',
-                  alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  emptyIcon:    { fontSize: 40 },
-  emptyTitle:   { color: theme.textPrimary, fontSize: uiType.title, fontWeight: '800', marginBottom: 10 },
-  emptyBody:    { color: theme.textSecondary, fontSize: uiType.body, textAlign: 'center', lineHeight: 22 },
   artwork:      { width: 220, height: 220, borderRadius: 32,
                   alignItems: 'center', justifyContent: 'center',
                   marginBottom: 24, position: 'relative',
