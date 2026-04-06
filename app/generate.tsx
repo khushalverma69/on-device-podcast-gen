@@ -7,6 +7,11 @@ import {
 import { runPipeline } from '../src/services/pipeline';
 import { useLibraryStore } from '../src/stores/libraryStore';
 import { theme } from '../src/constants/theme';
+import {
+  clearPendingPipelineRun,
+  getPendingPipelineRun,
+  savePendingPipelineRun,
+} from '../src/stores/pipelineRunStore';
 
 const STAGES = [
   { id: 0, label: 'Reading document',    icon: '📄' },
@@ -121,6 +126,8 @@ export default function GenerateScreen() {
   const [turns,        setTurns]        = useState<Turn[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDone,       setIsDone]       = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [resumeHint, setResumeHint] = useState('');
   const scrollRef  = useRef<ScrollView>(null);
   const screenAnim = useRef(new Animated.Value(0)).current;
   const doneScale  = useRef(new Animated.Value(0.8)).current;
@@ -143,15 +150,38 @@ export default function GenerateScreen() {
     return () => sub.remove();
   }, [isGenerating]);
 
-  useEffect(() => {
+  async function startRun(runInput?: {
+    topic?: string;
+    source?: string;
+    sourceType?: string;
+    sourceText?: string;
+  }) {
+    const effectiveInput = {
+      topic: runInput?.topic ?? (topic || 'Podcast Episode'),
+      source: runInput?.source ?? (source || ''),
+      sourceType: runInput?.sourceType ?? (sourceType || 'url'),
+      sourceText: runInput?.sourceText ?? (sourceText || ''),
+    };
+    turnsRef.current = [];
+    setTurns([]);
+    setCurrentStage(-1);
     setIsGenerating(true);
-    runPipeline({
-      topic: topic || 'Podcast Episode',
-      source: source || '',
-      sourceType: sourceType || 'url',
-      sourceText: sourceText || '',
-    }, {
-      onStageChange: (stage) => setCurrentStage(stage),
+    setIsDone(false);
+    setErrorMessage('');
+    await savePendingPipelineRun({
+      ...effectiveInput,
+      stage: -1,
+      updatedAt: Date.now(),
+    });
+    runPipeline(effectiveInput, {
+      onStageChange: (stage) => {
+        setCurrentStage(stage);
+        void savePendingPipelineRun({
+          ...effectiveInput,
+          stage,
+          updatedAt: Date.now(),
+        });
+      },
       onTurn: (speaker, text) => {
         const newTurn = { speaker, text };
         turnsRef.current = [...turnsRef.current, newTurn];
@@ -162,6 +192,7 @@ export default function GenerateScreen() {
         setCurrentStage(4);
         setIsGenerating(false);
         setIsDone(true);
+        await clearPendingPipelineRun();
 
         Animated.parallel([
           Animated.spring(doneScale,   { toValue: 1, tension: 80, friction: 10, useNativeDriver: true }),
@@ -184,9 +215,25 @@ export default function GenerateScreen() {
       },
       onError: (msg) => {
         setIsGenerating(false);
-        Alert.alert('Generation failed', msg);
+        setErrorMessage(msg);
+        void savePendingPipelineRun({
+          ...effectiveInput,
+          stage: Math.max(-1, currentStage),
+          updatedAt: Date.now(),
+          lastError: msg,
+        });
       },
     });
+  }
+
+  useEffect(() => {
+    void (async () => {
+      const pending = await getPendingPipelineRun();
+      if (pending && Date.now() - pending.updatedAt < 1000 * 60 * 30) {
+        setResumeHint(`Found interrupted run at stage ${Math.max(0, pending.stage + 1)}.`);
+      }
+      await startRun();
+    })();
   }, []);
 
   function getStatus(id: number): 'done' | 'active' | 'waiting' {
@@ -238,6 +285,26 @@ export default function GenerateScreen() {
             </Pressable>
           </Animated.View>
         )}
+
+        {!isGenerating && !isDone && errorMessage ? (
+          <Pressable style={s.retryBtn} onPress={() => void startRun()}>
+            <Text style={s.retryBtnTxt}>Retry generation</Text>
+          </Pressable>
+        ) : null}
+
+        {!isGenerating && !isDone && resumeHint ? (
+          <Pressable
+            style={s.resumeBtn}
+            onPress={async () => {
+              const pending = await getPendingPipelineRun();
+              if (!pending) return;
+              setResumeHint('');
+              await startRun(pending);
+            }}
+          >
+            <Text style={s.resumeBtnTxt}>{resumeHint} Tap to recover.</Text>
+          </Pressable>
+        ) : null}
 
       </ScrollView>
     </Animated.View>
@@ -293,4 +360,8 @@ const s = StyleSheet.create({
                       shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.35, shadowRadius: 12, elevation: 8 },
   doneBtnTxt:       { color: '#FFF', fontSize: 17, fontWeight: '800' },
+  retryBtn:         { marginTop: 8, borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: theme.primaryLight, borderWidth: 1, borderColor: theme.coral + '55' },
+  retryBtnTxt:      { color: theme.coral, fontWeight: '700', fontSize: 14 },
+  resumeBtn:        { marginTop: 10, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 12, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.divider },
+  resumeBtnTxt:     { color: theme.textSecondary, fontSize: 12, textAlign: 'center' },
 });
