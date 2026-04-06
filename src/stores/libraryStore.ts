@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { clearEpisodes, deleteEpisode, getAllEpisodes, insertEpisode } from '../db/schema';
+import { usePlayerStore } from './playerStore';
 import type { Episode } from '../types';
 
 type LibraryStoreState = {
@@ -16,21 +17,23 @@ export const useLibraryStore = create<LibraryStoreState>((set) => ({
   loadEpisodes: async () => {
     const episodes = await getAllEpisodes();
     set({ episodes });
+    await usePlayerStore.getState().restoreFromLibrary(episodes);
   },
   addEpisode: async (episode) => {
     await insertEpisode(episode);
-    set((state) => ({
-      episodes: [episode, ...state.episodes.filter((item) => item.id !== episode.id)],
-    }));
+    const nextEpisodes = [episode, ...get().episodes.filter((item) => item.id !== episode.id)];
+    set({ episodes: nextEpisodes });
+    await usePlayerStore.getState().restoreFromLibrary(nextEpisodes);
   },
   removeEpisode: async (id) => {
     await deleteEpisode(id);
-    set((state) => ({
-      episodes: state.episodes.filter((item) => item.id !== id),
-    }));
+    const nextEpisodes = get().episodes.filter((item) => item.id !== id);
+    set({ episodes: nextEpisodes });
+    await usePlayerStore.getState().restoreFromLibrary(nextEpisodes);
   },
   clearLibrary: async () => {
     await clearEpisodes();
     set({ episodes: [] });
+    await usePlayerStore.getState().restoreFromLibrary([]);
   },
 }));
