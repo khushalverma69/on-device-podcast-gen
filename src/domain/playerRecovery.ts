@@ -33,3 +33,22 @@ export function filterEpisodeIds(ids: string[] | undefined, allowedEpisodeIds: s
   const allowed = new Set(allowedEpisodeIds);
   return Array.from(new Set(ids.filter((id) => allowed.has(id))));
 }
+
+export function getNextQueuedEpisodeId(
+  queueEpisodeIds: string[],
+  queueIndex: number,
+  availableEpisodeIds: string[],
+): string | null {
+  if (queueIndex < 0) return null;
+  const available = new Set(availableEpisodeIds);
+  for (let index = queueIndex + 1; index < queueEpisodeIds.length; index += 1) {
+    const episodeId = queueEpisodeIds[index];
+    if (available.has(episodeId)) return episodeId;
+  }
+  return null;
+}
+
+export function getCompletedPosition(position: number, duration?: number): number {
+  if (duration && duration > 0) return Math.round(duration);
+  return Math.max(0, Math.round(position));
+}

@@ -2,7 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { filterEpisodeIds, filterEpisodeMap, pickRestorableEpisodeId } from '../domain/playerRecovery';
+import {
+  filterEpisodeIds,
+  filterEpisodeMap,
+  getCompletedPosition,
+  getNextQueuedEpisodeId,
+  pickRestorableEpisodeId,
+} from '../domain/playerRecovery';
 import {
   getPlaybackSnapshot,
   inspectEpisodeAudio,
@@ -83,6 +89,7 @@ type PlayerState = {
   syncProgress:     () => Promise<void>;
   restoreFromLibrary: (episodes: Episode[]) => Promise<void>;
   validateCurrentEpisode: () => Promise<boolean>;
+  handlePlaybackEnded: (episodes: Episode[], position: number) => Promise<void>;
   setProgress:      (position: number, duration: number) => void;
   setEpisode:       (episode: Episode) => void;
   addBookmark:      () => void;
@@ -257,6 +264,52 @@ export const usePlayerStore = create<PlayerState>()(
 
         set({ playbackError: undefined });
         return true;
+      },
+
+      handlePlaybackEnded: async (episodes, position) => {
+        const state = get();
+        const currentEpisode = state.currentEpisode;
+        if (!currentEpisode) return;
+
+        const completedPosition = getCompletedPosition(position, state.durationSeconds || currentEpisode.durationSeconds);
+        const availableEpisodeIds = episodes.map((episode) => episode.id);
+        const nextEpisodeId = getNextQueuedEpisodeId(state.queueEpisodeIds, state.queueIndex, availableEpisodeIds);
+        const nextEpisode = nextEpisodeId
+          ? episodes.find((episode) => episode.id === nextEpisodeId) ?? null
+          : null;
+
+        set((prev) => ({
+          isPlaying: false,
+          positionSeconds: completedPosition,
+          durationSeconds: prev.durationSeconds || currentEpisode.durationSeconds || completedPosition,
+          resumeByEpisode: {
+            ...prev.resumeByEpisode,
+            [currentEpisode.id]: completedPosition,
+          },
+        }));
+
+        if (!nextEpisode) {
+          return;
+        }
+
+        set((prev) => ({
+          currentEpisode: {
+            id: nextEpisode.id,
+            title: nextEpisode.title,
+            mp3Path: nextEpisode.mp3Path,
+            durationSeconds: nextEpisode.durationSeconds ?? 0,
+            modelUsed: nextEpisode.modelUsed ?? undefined,
+            turns: nextEpisode.turns ?? 0,
+            createdAt: nextEpisode.createdAt,
+          },
+          lastEpisodeId: nextEpisode.id,
+          queueIndex: prev.queueEpisodeIds.findIndex((id) => id === nextEpisode.id),
+          positionSeconds: prev.resumeByEpisode[nextEpisode.id] ?? 0,
+          durationSeconds: nextEpisode.durationSeconds ?? 0,
+          playbackError: undefined,
+        }));
+
+        await get().play(nextEpisode.id);
       },
 
       setProgress: (position, duration) =>

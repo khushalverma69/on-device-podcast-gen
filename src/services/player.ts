@@ -2,7 +2,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import TrackPlayer, {
   AppKilledPlaybackBehavior,
   Capability,
+  Event,
   State,
+  addEventListener,
 } from 'react-native-track-player';
 import { trackWarn } from './telemetry';
 
@@ -151,4 +153,11 @@ export async function getPlaybackSnapshot(): Promise<{
     duration: progress.duration ?? 0,
     isPlaying,
   };
+}
+
+export function subscribeToPlaybackQueueEnded(
+  listener: (event: { track: number; position: number }) => void,
+): () => void {
+  const subscription = addEventListener(Event.PlaybackQueueEnded, listener);
+  return () => subscription.remove();
 }

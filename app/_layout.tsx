@@ -7,6 +7,7 @@ import { Text, View } from 'react-native';
 import { initDb } from '../src/db/schema';
 import { theme } from '../src/constants/theme';
 import { useLibraryStore } from '../src/stores/libraryStore';
+import { subscribeToPlaybackQueueEnded } from '../src/services/player';
 import { usePlayerStore } from '../src/stores/playerStore';
 import { useSettingsStore } from '../src/stores/settingsStore';
 import { ThemeProvider } from '../src/providers/themeProvider';
@@ -38,8 +39,15 @@ export default function RootLayout() {
 
     void bootstrap();
 
+    const unsubscribePlayback = subscribeToPlaybackQueueEnded((event) => {
+      void usePlayerStore
+        .getState()
+        .handlePlaybackEnded(useLibraryStore.getState().episodes, event.position);
+    });
+
     return () => {
       isMounted = false;
+      unsubscribePlayback();
     };
   }, []);
 

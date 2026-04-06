@@ -99,6 +99,16 @@ assert.deepEqual(
   playerRecovery.filterEpisodeMap({ 'ep-1': 10, 'ep-2': 20 }, ['ep-2']),
   { 'ep-2': 20 }
 );
+assert.equal(
+  playerRecovery.getNextQueuedEpisodeId(['ep-1', 'ep-2', 'ep-3'], 0, ['ep-2', 'ep-3']),
+  'ep-2'
+);
+assert.equal(
+  playerRecovery.getNextQueuedEpisodeId(['ep-1', 'ep-2'], 1, ['ep-1', 'ep-2']),
+  null
+);
+assert.equal(playerRecovery.getCompletedPosition(91.2, 93), 93);
+assert.equal(playerRecovery.getCompletedPosition(91.2, 0), 91);
 telemetry.clearTelemetry();
 telemetry.trackEvent('pipeline.start', { sourceType: 'url' });
 telemetry.trackWarn('source.validation_failed', { sourceType: 'pdf' });
