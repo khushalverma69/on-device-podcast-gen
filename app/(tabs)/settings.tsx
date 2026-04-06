@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable,
-  StyleSheet, Animated, Alert,
+  StyleSheet, Animated, Alert, Modal,
 } from 'react-native';
 import ModelDownloader from '../../src/components/ModelDownloader';
 import { useModelStore, MODELS } from '../../src/stores/modelStore';
 import { useSettingsStore } from '../../src/stores/settingsStore';
 import { useLibraryStore } from '../../src/stores/libraryStore';
 import { theme } from '../../src/constants/theme';
-import { readTelemetry } from '../../src/services/telemetry';
+import { clearTelemetry, readTelemetry, type TelemetryEntry } from '../../src/services/telemetry';
 
 function SettingRow({
   label, value, onPress, isLast, rightElement,
@@ -45,6 +45,54 @@ function SettingCard({ children }: { children: React.ReactNode }) {
   );
 }
 
+function DiagnosticsStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: 'neutral' | 'warn' | 'error';
+}) {
+  const toneStyle =
+    tone === 'error' ? s.diagStatError : tone === 'warn' ? s.diagStatWarn : s.diagStatNeutral;
+  return (
+    <View style={[s.diagStatCard, toneStyle]}>
+      <Text style={s.diagStatValue}>{value}</Text>
+      <Text style={s.diagStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function DiagnosticsEntryCard({ entry }: { entry: TelemetryEntry }) {
+  const levelStyle =
+    entry.level === 'error' ? s.diagBadgeError : entry.level === 'warn' ? s.diagBadgeWarn : s.diagBadgeInfo;
+  const details = entry.details ? JSON.stringify(entry.details) : '';
+  return (
+    <View style={s.diagEntryCard}>
+      <View style={s.diagEntryTop}>
+        <Text style={s.diagEntryTime}>
+          {new Date(entry.ts).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </Text>
+        <View style={[s.diagBadge, levelStyle]}>
+          <Text style={s.diagBadgeTxt}>{entry.level.toUpperCase()}</Text>
+        </View>
+      </View>
+      <Text style={s.diagEntryEvent}>{entry.event}</Text>
+      {details ? (
+        <Text style={s.diagEntryDetails} numberOfLines={6}>
+          {details}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const VOICE_OPTIONS = [
   { id: 'kokoro-af_heart', name: 'Kokoro af_heart (Female)' },
   { id: 'kokoro-am_adam', name: 'Kokoro am_adam (Male)' },
@@ -56,6 +104,8 @@ const VOICE_OPTIONS = [
 
 export default function SettingsScreen() {
   const [showModels, setShowModels] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [telemetryEntries, setTelemetryEntries] = useState<TelemetryEntry[]>([]);
   const screenAnim = useRef(new Animated.Value(0)).current;
   const activeModelId = useModelStore(s => s.activeModelId);
   const downloaded    = useModelStore(s => s.downloaded);
@@ -75,6 +125,13 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     Animated.timing(screenAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+  }, []);
+
+  useEffect(() => {
+    const syncTelemetry = () => setTelemetryEntries(readTelemetry().slice().reverse());
+    syncTelemetry();
+    const interval = setInterval(syncTelemetry, 1500);
+    return () => clearInterval(interval);
   }, []);
 
   const handleScriptLengthPress = () => {
@@ -163,23 +220,32 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const handleShowDiagnostics = () => {
-    const entries = readTelemetry().slice(-8).reverse();
-    if (entries.length === 0) {
-      Alert.alert('Diagnostics', 'No recent events recorded yet.');
-      return;
-    }
-    const lines = entries.map((entry) => {
-      const time = new Date(entry.ts).toLocaleTimeString('en-US');
-      return `${time} · ${entry.level.toUpperCase()} · ${entry.event}`;
-    });
-    Alert.alert('Diagnostics (recent)', lines.join('\n'));
+  const handleShowDiagnostics = () => setShowDiagnostics(true);
+
+  const handleClearDiagnostics = () => {
+    Alert.alert('Clear diagnostics', 'Remove all buffered local telemetry events?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => {
+          clearTelemetry();
+          setTelemetryEntries([]);
+        },
+      },
+    ]);
   };
 
   const getVoiceName = (id?: string) => {
     const found = VOICE_OPTIONS.find(v => v.id === id);
     return found ? found.name : 'Default';
   };
+
+  const recentEntries = telemetryEntries.slice(0, 12);
+  const errorCount = telemetryEntries.filter((entry) => entry.level === 'error').length;
+  const warnCount = telemetryEntries.filter((entry) => entry.level === 'warn').length;
+  const infoCount = telemetryEntries.filter((entry) => entry.level === 'info').length;
+  const latestEvent = telemetryEntries[0];
 
   return (
     <Animated.View style={[s.screen, { opacity: screenAnim }]}> 
@@ -261,12 +327,20 @@ export default function SettingsScreen() {
         <Text style={s.sectionLabel}>DIAGNOSTICS</Text>
         <SettingCard>
           <SettingRow
-            label="Recent events"
-            value={`${readTelemetry().length} buffered`}
+            label="Buffered events"
+            value={`${telemetryEntries.length}`}
           />
           <SettingRow
-            label="View latest diagnostics"
+            label="Latest event"
+            value={latestEvent?.event ?? 'None'}
+          />
+          <SettingRow
+            label="Open diagnostics panel"
             onPress={handleShowDiagnostics}
+          />
+          <SettingRow
+            label="Clear diagnostics"
+            onPress={handleClearDiagnostics}
             isLast
           />
         </SettingCard>
@@ -307,6 +381,50 @@ export default function SettingsScreen() {
       </ScrollView>
 
       <ModelDownloader visible={showModels} onClose={() => setShowModels(false)} />
+
+      <Modal visible={showDiagnostics} animationType="slide" onRequestClose={() => setShowDiagnostics(false)}>
+        <View style={s.diagScreen}>
+          <View style={s.diagHeader}>
+            <View>
+              <Text style={s.eyebrow}>LOCAL DIAGNOSTICS</Text>
+              <Text style={s.diagTitle}>Telemetry</Text>
+            </View>
+            <Pressable style={s.diagCloseBtn} onPress={() => setShowDiagnostics(false)}>
+              <Text style={s.diagCloseTxt}>Done</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={s.diagBody}>
+            <View style={s.diagStatsRow}>
+              <DiagnosticsStat label="Errors" value={String(errorCount)} tone="error" />
+              <DiagnosticsStat label="Warnings" value={String(warnCount)} tone="warn" />
+              <DiagnosticsStat label="Info" value={String(infoCount)} tone="neutral" />
+            </View>
+
+            <View style={s.diagPanel}>
+              <Text style={s.diagPanelLabel}>WHAT THIS SHOWS</Text>
+              <Text style={s.diagPanelText}>
+                Local telemetry from generation, source validation, OCR, and playback integrity checks. Nothing here is uploaded.
+              </Text>
+            </View>
+
+            {recentEntries.length === 0 ? (
+              <View style={s.diagEmptyCard}>
+                <Text style={s.diagEmptyTitle}>No diagnostics yet</Text>
+                <Text style={s.diagEmptyBody}>
+                  Run generation, import a source, or open playback flows to populate local telemetry events.
+                </Text>
+              </View>
+            ) : (
+              <View style={s.diagList}>
+                {recentEntries.map((entry) => (
+                  <DiagnosticsEntryCard key={`${entry.ts}-${entry.event}`} entry={entry} />
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
@@ -339,4 +457,36 @@ const s = StyleSheet.create({
   privacyDot:   { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.mint },
   privacyTitle: { color: theme.mint, fontSize: 14, fontWeight: '700' },
   privacyLine:  { color: theme.mint, fontSize: 13, lineHeight: 24, opacity: 0.8 },
+  diagScreen:   { flex: 1, backgroundColor: theme.background },
+  diagHeader:   { paddingTop: 64, paddingHorizontal: 24, paddingBottom: 20,
+                  flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  diagTitle:    { color: theme.textPrimary, fontSize: 32, fontWeight: '800' },
+  diagCloseBtn: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.card,
+                  borderWidth: 1, borderColor: theme.border },
+  diagCloseTxt: { color: theme.textPrimary, fontWeight: '700', fontSize: 14 },
+  diagBody:     { paddingHorizontal: 16, paddingBottom: 36, gap: 14 },
+  diagStatsRow: { flexDirection: 'row', gap: 10 },
+  diagStatCard: { flex: 1, borderRadius: 16, padding: 14, borderWidth: 1 },
+  diagStatNeutral: { backgroundColor: theme.card, borderColor: theme.border },
+  diagStatWarn: { backgroundColor: '#FFF7ED', borderColor: '#FDBA74' },
+  diagStatError:{ backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
+  diagStatValue:{ color: theme.textPrimary, fontSize: 22, fontWeight: '800', marginBottom: 4 },
+  diagStatLabel:{ color: theme.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  diagPanel:    { backgroundColor: theme.card, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: theme.border },
+  diagPanelLabel:{ color: theme.textSecondary, fontSize: 10, fontWeight: '700', letterSpacing: 2, marginBottom: 8 },
+  diagPanelText:{ color: theme.textPrimary, fontSize: 14, lineHeight: 21 },
+  diagEmptyCard:{ backgroundColor: theme.card, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: theme.border },
+  diagEmptyTitle:{ color: theme.textPrimary, fontSize: 16, fontWeight: '800', marginBottom: 6 },
+  diagEmptyBody:{ color: theme.textSecondary, fontSize: 13, lineHeight: 20 },
+  diagList:     { gap: 10 },
+  diagEntryCard:{ backgroundColor: theme.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: theme.border },
+  diagEntryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 },
+  diagEntryTime:{ color: theme.textSecondary, fontSize: 12, flex: 1 },
+  diagBadge:    { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  diagBadgeInfo:{ backgroundColor: theme.primaryLight },
+  diagBadgeWarn:{ backgroundColor: '#FFEDD5' },
+  diagBadgeError:{ backgroundColor: '#FEE2E2' },
+  diagBadgeTxt: { color: theme.textPrimary, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  diagEntryEvent:{ color: theme.textPrimary, fontSize: 14, fontWeight: '700', marginBottom: 8 },
+  diagEntryDetails:{ color: theme.textSecondary, fontSize: 12, lineHeight: 18 },
 });

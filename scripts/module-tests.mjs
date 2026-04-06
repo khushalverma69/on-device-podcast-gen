@@ -4,6 +4,7 @@ import * as generationRun from '../.tmp-tests/domain/generationRun.js';
 import * as playerRecovery from '../.tmp-tests/domain/playerRecovery.js';
 import * as sourceValidation from '../.tmp-tests/domain/sourceValidation.js';
 import * as text from '../.tmp-tests/domain/textProcessing.js';
+import * as telemetry from '../.tmp-tests/services/telemetry.js';
 import * as settings from '../.tmp-tests/stores/settingsParsing.js';
 
 const cleaned = text.stripHtmlToText('<h1>Hello</h1><script>x()</script><p>World</p>');
@@ -98,5 +99,15 @@ assert.deepEqual(
   playerRecovery.filterEpisodeMap({ 'ep-1': 10, 'ep-2': 20 }, ['ep-2']),
   { 'ep-2': 20 }
 );
+telemetry.clearTelemetry();
+telemetry.trackEvent('pipeline.start', { sourceType: 'url' });
+telemetry.trackWarn('source.validation_failed', { sourceType: 'pdf' });
+telemetry.trackError('player.audio_missing', { episodeId: 'ep-1' });
+const telemetryEntries = telemetry.readTelemetry();
+assert.equal(telemetryEntries.length, 3);
+assert.equal(telemetryEntries[0].event, 'pipeline.start');
+assert.equal(telemetryEntries[2].level, 'error');
+telemetry.clearTelemetry();
+assert.equal(telemetry.readTelemetry().length, 0);
 
 console.log('module-tests: ok');
