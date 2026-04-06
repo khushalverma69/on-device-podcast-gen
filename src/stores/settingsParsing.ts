@@ -1,5 +1,5 @@
 import type { ThemeMode } from '../constants/theme';
-import type { ScriptLength } from '../types';
+import type { ScriptLength, ScriptStyle } from '../types';
 
 export function parseScriptLength(value?: string | null): ScriptLength {
   if (value === 'short' || value === 'normal' || value === 'long') return value;
@@ -19,4 +19,11 @@ export function parseThemeMode(value?: string | null): ThemeMode {
 export function parseBoolean(value?: string | null, fallback = false): boolean {
   if (value == null) return fallback;
   return value === 'true';
+}
+
+export function parseScriptStyle(value?: string | null): ScriptStyle {
+  if (value === 'educational' || value === 'storytelling' || value === 'debate' || value === 'balanced') {
+    return value;
+  }
+  return 'balanced';
 }

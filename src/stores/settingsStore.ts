@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
 
-import type { ScriptLength } from '../types';
+import type { ScriptLength, ScriptStyle } from '../types';
 import { setThemeMode as applyThemeMode, type ThemeMode } from '../constants/theme';
-import { parseBoolean, parseNumber, parseScriptLength, parseThemeMode } from './settingsParsing';
+import { parseBoolean, parseNumber, parseScriptLength, parseScriptStyle, parseThemeMode } from './settingsParsing';
 
 const STORE_FILE = (FileSystem.documentDirectory ?? '') + 'settings-store.json';
 
@@ -51,6 +51,7 @@ type SettingsStoreState = {
   host1VoiceId?: string;
   host2VoiceId?: string;
   scriptLength: ScriptLength;
+  scriptStyle: ScriptStyle;
   pauseMs: number;
   themeMode: ThemeMode;
   onboardingAutoAdvance: boolean;
@@ -60,6 +61,7 @@ type SettingsStoreState = {
   setHost1VoiceId: (value?: string) => Promise<void>;
   setHost2VoiceId: (value?: string) => Promise<void>;
   setScriptLength: (value: ScriptLength) => Promise<void>;
+  setScriptStyle: (value: ScriptStyle) => Promise<void>;
   setPauseMs: (value: number) => Promise<void>;
   setThemeMode: (value: ThemeMode) => Promise<void>;
   setOnboardingAutoAdvance: (value: boolean) => Promise<void>;
@@ -71,18 +73,20 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
   host1VoiceId:     undefined,
   host2VoiceId:     undefined,
   scriptLength:     'normal',
+  scriptStyle:      'balanced',
   pauseMs:          400,
   themeMode:        'light',
   onboardingAutoAdvance: true,
   onboardingSeen: false,
 
   hydrate: async () => {
-    const [preferredModelId, host1VoiceId, host2VoiceId, scriptLengthRaw, pauseRaw, themeModeRaw, onboardingAutoRaw, onboardingSeenRaw] =
+    const [preferredModelId, host1VoiceId, host2VoiceId, scriptLengthRaw, scriptStyleRaw, pauseRaw, themeModeRaw, onboardingAutoRaw, onboardingSeenRaw] =
       await Promise.all([
         getItem(key('preferredModelId')),
         getItem(key('host1VoiceId')),
         getItem(key('host2VoiceId')),
         getItem(key('scriptLength')),
+        getItem(key('scriptStyle')),
         getItem(key('pauseMs')),
         getItem(key('themeMode')),
         getItem(key('onboardingAutoAdvance')),
@@ -97,6 +101,7 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
       host1VoiceId:     host1VoiceId ?? undefined,
       host2VoiceId:     host2VoiceId ?? undefined,
       scriptLength:     parseScriptLength(scriptLengthRaw),
+      scriptStyle:      parseScriptStyle(scriptStyleRaw),
       pauseMs:          pauseParsed != null ? Math.max(0, Math.round(pauseParsed)) : 400,
       themeMode,
       onboardingAutoAdvance,
@@ -126,6 +131,11 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
   setScriptLength: async (value) => {
     await setItem(key('scriptLength'), value);
     set({ scriptLength: value });
+  },
+
+  setScriptStyle: async (value) => {
+    await setItem(key('scriptStyle'), value);
+    set({ scriptStyle: value });
   },
 
   setPauseMs: async (value) => {

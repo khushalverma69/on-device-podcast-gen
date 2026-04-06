@@ -2,9 +2,10 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { generatePodcastScript } from './llm';
 import { buildSourceContext } from './source';
-import { synthesizeScriptToWav } from './tts';
+import { releaseTts, synthesizeScriptToWav } from './tts';
 import { useModelStore } from '../stores/modelStore';
 import type { SourceType } from '../types';
+import { releaseLlm } from './llm';
 
 export interface PipelineCallbacks {
   onStageChange: (stage: number, label: string) => void;
@@ -66,5 +67,8 @@ export async function runPipeline(
     });
   } catch (e: any) {
     callbacks.onError(e?.message ?? 'Pipeline failed');
+  } finally {
+    // Release heavyweight contexts between runs to reduce memory pressure on low-end devices.
+    await Promise.allSettled([releaseLlm(), releaseTts()]);
   }
 }

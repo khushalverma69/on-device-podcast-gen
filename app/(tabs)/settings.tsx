@@ -60,8 +60,8 @@ export default function SettingsScreen() {
   const downloaded    = useModelStore(s => s.downloaded);
   
   const { 
-    scriptLength, pauseMs, host1VoiceId, host2VoiceId, themeMode, onboardingAutoAdvance,
-    setScriptLength, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode, setOnboardingAutoAdvance, setOnboardingSeen 
+    scriptLength, scriptStyle, pauseMs, host1VoiceId, host2VoiceId, themeMode, onboardingAutoAdvance,
+    setScriptLength, setScriptStyle, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode, setOnboardingAutoAdvance, setOnboardingSeen 
   } = useSettingsStore();
   
   const clearLibrary = useLibraryStore(s => s.clearLibrary);
@@ -91,6 +91,16 @@ export default function SettingsScreen() {
       { text: 'Short (400ms)', onPress: () => setPauseMs(400) },
       { text: 'Medium (800ms)', onPress: () => setPauseMs(800) },
       { text: 'Long (1200ms)', onPress: () => setPauseMs(1200) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleScriptStylePress = () => {
+    Alert.alert('Conversation Style', 'Pick how your generated episode should sound.', [
+      { text: 'Balanced', onPress: () => void setScriptStyle('balanced') },
+      { text: 'Educational', onPress: () => void setScriptStyle('educational') },
+      { text: 'Storytelling', onPress: () => void setScriptStyle('storytelling') },
+      { text: 'Debate', onPress: () => void setScriptStyle('debate') },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
@@ -196,6 +206,11 @@ export default function SettingsScreen() {
             label="Pause between turns"
             value={`${pauseMs}ms`}
             onPress={handlePausePress}
+          />
+          <SettingRow
+            label="Conversation style"
+            value={scriptStyle.charAt(0).toUpperCase() + scriptStyle.slice(1)}
+            onPress={handleScriptStylePress}
             isLast
           />
         </SettingCard>

@@ -7,6 +7,27 @@ import {
 } from '../domain/textProcessing';
 import type { SourceType } from '../types';
 
+function decodeBase64(input: string): string {
+  try {
+    const atobFn = (globalThis as any).atob as ((value: string) => string) | undefined;
+    return atobFn ? atobFn(input) : '';
+  } catch {
+    return '';
+  }
+}
+
+function extractPdfTextFromBinary(binary: string): string {
+  const chunks: string[] = [];
+  const re = /\(([^()]{4,})\)\s*Tj/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(binary))) {
+    const value = m[1].replace(/\\[nrt]/g, ' ').replace(/\\\(/g, '(').replace(/\\\)/g, ')');
+    if (value.trim()) chunks.push(value.trim());
+    if (chunks.length >= 300) break;
+  }
+  return normalizeSourceText(chunks.join(' '));
+}
+
 async function extractFromUrl(url: string): Promise<{ topic: string; text: string }> {
   const res = await fetch(url);
   if (!res.ok) throw new Error('Could not fetch URL content.');
@@ -22,6 +43,15 @@ async function extractFromUrl(url: string): Promise<{ topic: string; text: strin
 
 async function extractFromFile(uri: string): Promise<string> {
   try {
+    if (uri.toLowerCase().endsWith('.pdf')) {
+      const b64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const binary = decodeBase64(b64);
+      const extracted = extractPdfTextFromBinary(binary);
+      if (extracted) return extracted;
+    }
+
     const text = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.UTF8,
     });
@@ -31,11 +61,33 @@ async function extractFromFile(uri: string): Promise<string> {
   }
 }
 
+export async function runImageOcr(imageUri: string): Promise<string> {
+  try {
+    const form = new FormData();
+    form.append('url', imageUri);
+    form.append('language', 'eng');
+    form.append('apikey', 'helloworld');
+
+    const res = await fetch('https://api.ocr.space/parse/image', {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) return '';
+    const data = await res.json();
+    const parsed = data?.ParsedResults?.[0]?.ParsedText as string | undefined;
+    return normalizeSourceText(parsed || '');
+  } catch {
+    return '';
+  }
+}
+
 export async function performBasicOcrFromCameraNotes(input: {
+  imageUri?: string;
   ocrText?: string;
   notes?: string;
 }): Promise<string> {
-  return normalizeSourceText(input.ocrText?.trim() || input.notes?.trim() || '');
+  const remoteOcr = input.imageUri ? await runImageOcr(input.imageUri) : '';
+  return normalizeSourceText(input.ocrText?.trim() || remoteOcr || input.notes?.trim() || '');
 }
 
 export async function buildSourceContext(input: {
@@ -49,6 +101,7 @@ export async function buildSourceContext(input: {
 
   if (sourceType === 'camera') {
     const extracted = await performBasicOcrFromCameraNotes({
+      imageUri: source,
       ocrText: input.sourceText,
       notes: input.topic,
     });

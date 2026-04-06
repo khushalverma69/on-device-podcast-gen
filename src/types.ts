@@ -23,3 +23,4 @@ export type Episode = {
 };
 
 export type ScriptLength = 'short' | 'normal' | 'long';
+export type ScriptStyle = 'balanced' | 'educational' | 'storytelling' | 'debate';

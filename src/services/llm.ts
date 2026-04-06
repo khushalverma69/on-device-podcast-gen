@@ -49,6 +49,7 @@ function buildPrompt(topic: string, length: ScriptLength, sourceContext?: string
     grounded.sections.length > 0
       ? `Top Source Sections:\n${grounded.sections.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
       : 'Top Source Sections: (none provided)',
+    `Style: ${useSettingsStore.getState().scriptStyle}`,
     `Write a 2-host podcast conversation with exactly ${turns} turns.`,
     'Alternate speakers HOST1 and HOST2.',
     'Output only strict JSON as an array of objects: [{"speaker":"HOST1|HOST2","text":"..."}].',

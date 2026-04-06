@@ -60,6 +60,8 @@ export default function PlayerScreen() {
   const setSpeed  = usePlayerStore(st => st.setSpeed);
   const seekBy    = usePlayerStore(st => st.seekBy);
   const syncProgress = usePlayerStore(st => st.syncProgress);
+  const addBookmark = usePlayerStore(st => st.addBookmark);
+  const bookmarks = usePlayerStore(st => st.currentEpisode ? st.bookmarks[st.currentEpisode.id] ?? [] : []);
 
   const screenAnim = useRef(new Animated.Value(0)).current;
   const playScale  = useRef(new Animated.Value(1)).current;
@@ -205,6 +207,26 @@ export default function PlayerScreen() {
           </View>
         </View>
 
+        <View style={s.bookmarkCard}>
+          <View style={s.bookmarkHeader}>
+            <Text style={s.speedLabel}>BOOKMARKS</Text>
+            <Pressable style={s.bookmarkAdd} onPress={addBookmark}>
+              <Text style={s.bookmarkAddTxt}>+ Add</Text>
+            </Pressable>
+          </View>
+          <View style={s.bookmarkRow}>
+            {bookmarks.length === 0 ? (
+              <Text style={s.bookmarkEmpty}>No bookmarks yet</Text>
+            ) : (
+              bookmarks.map((sec) => (
+                <Pressable key={sec} style={s.bookmarkChip} onPress={() => void seekBy(sec - position)}>
+                  <Text style={s.bookmarkChipTxt}>{formatTime(sec)}</Text>
+                </Pressable>
+              ))
+            )}
+          </View>
+        </View>
+
       </ScrollView>
     </Animated.View>
   );
@@ -284,4 +306,13 @@ const s = StyleSheet.create({
   speedBtnActive:   { backgroundColor: theme.primaryLight },
   speedBtnTxt:      { color: theme.textSecondary, fontSize: 13, fontWeight: '600' },
   speedBtnTxtActive:{ color: theme.primary, fontWeight: '800' },
+  bookmarkCard: { backgroundColor: theme.card, borderRadius: 18, padding: 16,
+                  width: '100%', marginTop: 12, borderWidth: 1, borderColor: theme.divider },
+  bookmarkHeader:{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  bookmarkAdd:  { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: theme.primaryLight },
+  bookmarkAddTxt:{ color: theme.primary, fontWeight: '700', fontSize: 12 },
+  bookmarkRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  bookmarkChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primaryLight },
+  bookmarkChipTxt:{ color: theme.primary, fontWeight: '600', fontSize: 12 },
+  bookmarkEmpty:{ color: theme.textSecondary, fontSize: 12 },
 });
