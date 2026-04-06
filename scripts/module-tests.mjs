@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import * as generationRun from '../.tmp-tests/domain/generationRun.js';
+import * as libraryIntegrity from '../.tmp-tests/domain/libraryIntegrity.js';
 import * as playerRecovery from '../.tmp-tests/domain/playerRecovery.js';
 import * as sourceValidation from '../.tmp-tests/domain/sourceValidation.js';
 import * as text from '../.tmp-tests/domain/textProcessing.js';
@@ -109,6 +110,20 @@ assert.equal(
 );
 assert.equal(playerRecovery.getCompletedPosition(91.2, 93), 93);
 assert.equal(playerRecovery.getCompletedPosition(91.2, 0), 91);
+assert.deepEqual(
+  libraryIntegrity.summarizeBrokenEpisodes([
+    { ok: true, normalizedUri: 'file:///ok.wav' },
+    { ok: false, code: 'missing_file', message: 'Missing' },
+    { ok: false, code: 'empty_file', message: 'Empty' },
+    { ok: false, code: 'missing_path', message: 'No path' },
+  ]),
+  {
+    brokenCount: 3,
+    missingFileCount: 1,
+    emptyFileCount: 1,
+    missingPathCount: 1,
+  }
+);
 telemetry.clearTelemetry();
 telemetry.trackEvent('pipeline.start', { sourceType: 'url' });
 telemetry.trackWarn('source.validation_failed', { sourceType: 'pdf' });

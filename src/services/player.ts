@@ -4,7 +4,6 @@ import TrackPlayer, {
   Capability,
   Event,
   State,
-  addEventListener,
 } from 'react-native-track-player';
 import { trackWarn } from './telemetry';
 
@@ -158,6 +157,6 @@ export async function getPlaybackSnapshot(): Promise<{
 export function subscribeToPlaybackQueueEnded(
   listener: (event: { track: number; position: number }) => void,
 ): () => void {
-  const subscription = addEventListener(Event.PlaybackQueueEnded, listener);
+  const subscription = TrackPlayer.addEventListener(Event.PlaybackQueueEnded, listener);
   return () => subscription.remove();
 }

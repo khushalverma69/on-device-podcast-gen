@@ -12,7 +12,7 @@ type LibraryStoreState = {
   clearLibrary: () => Promise<void>;
 };
 
-export const useLibraryStore = create<LibraryStoreState>((set) => ({
+export const useLibraryStore = create<LibraryStoreState>((set, get) => ({
   episodes: [],
   loadEpisodes: async () => {
     const episodes = await getAllEpisodes();

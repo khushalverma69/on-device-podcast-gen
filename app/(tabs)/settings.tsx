@@ -4,10 +4,12 @@ import {
   StyleSheet, Animated, Alert, Modal,
 } from 'react-native';
 import ModelDownloader from '../../src/components/ModelDownloader';
+import { summarizeBrokenEpisodes } from '../../src/domain/libraryIntegrity';
 import { useModelStore, MODELS } from '../../src/stores/modelStore';
 import { useSettingsStore } from '../../src/stores/settingsStore';
 import { useLibraryStore } from '../../src/stores/libraryStore';
 import { theme } from '../../src/constants/theme';
+import { inspectEpisodeAudio } from '../../src/services/player';
 import { clearTelemetry, readTelemetry, type TelemetryEntry } from '../../src/services/telemetry';
 
 function SettingRow({
@@ -106,6 +108,7 @@ export default function SettingsScreen() {
   const [showModels, setShowModels] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [telemetryEntries, setTelemetryEntries] = useState<TelemetryEntry[]>([]);
+  const [brokenEpisodeCount, setBrokenEpisodeCount] = useState<number | null>(null);
   const screenAnim = useRef(new Animated.Value(0)).current;
   const activeModelId = useModelStore(s => s.activeModelId);
   const downloaded    = useModelStore(s => s.downloaded);
@@ -115,7 +118,9 @@ export default function SettingsScreen() {
     setScriptLength, setScriptStyle, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode, setOnboardingAutoAdvance, setOnboardingSeen 
   } = useSettingsStore();
   
+  const episodes = useLibraryStore(s => s.episodes);
   const clearLibrary = useLibraryStore(s => s.clearLibrary);
+  const removeEpisode = useLibraryStore(s => s.removeEpisode);
 
   const activeModelName = activeModelId && MODELS[activeModelId]
     ? MODELS[activeModelId].name
@@ -218,6 +223,84 @@ export default function SettingsScreen() {
         Alert.alert('Library Cleared');
       }},
     ]);
+  };
+
+  const scanLibraryIntegrity = async () => {
+    if (episodes.length === 0) {
+      setBrokenEpisodeCount(0);
+      Alert.alert('Library scan', 'No episodes in your library yet.');
+      return;
+    }
+
+    const results = await Promise.all(
+      episodes.map((episode) =>
+        inspectEpisodeAudio({
+          id: episode.id,
+          title: episode.title,
+          mp3Path: episode.mp3Path,
+        })
+      )
+    );
+    const summary = summarizeBrokenEpisodes(results);
+    setBrokenEpisodeCount(summary.brokenCount);
+
+    if (summary.brokenCount === 0) {
+      Alert.alert('Library scan', `All ${episodes.length} episodes look healthy.`);
+      return;
+    }
+
+    const lines = [
+      `${summary.brokenCount} broken episode${summary.brokenCount === 1 ? '' : 's'} found.`,
+      summary.missingFileCount ? `${summary.missingFileCount} missing audio file${summary.missingFileCount === 1 ? '' : 's'}` : '',
+      summary.emptyFileCount ? `${summary.emptyFileCount} empty or corrupted audio file${summary.emptyFileCount === 1 ? '' : 's'}` : '',
+      summary.missingPathCount ? `${summary.missingPathCount} episode${summary.missingPathCount === 1 ? '' : 's'} without saved audio` : '',
+    ].filter(Boolean);
+
+    Alert.alert('Library scan', lines.join('\n'));
+  };
+
+  const handleRemoveBrokenEpisodes = async () => {
+    if (episodes.length === 0) {
+      Alert.alert('Remove broken episodes', 'No episodes in your library yet.');
+      return;
+    }
+
+    const results = await Promise.all(
+      episodes.map(async (episode) => ({
+        episode,
+        integrity: await inspectEpisodeAudio({
+          id: episode.id,
+          title: episode.title,
+          mp3Path: episode.mp3Path,
+        }),
+      }))
+    );
+
+    const brokenEpisodes = results.filter((result) => !result.integrity.ok).map((result) => result.episode);
+    if (brokenEpisodes.length === 0) {
+      setBrokenEpisodeCount(0);
+      Alert.alert('Remove broken episodes', 'No broken episodes found.');
+      return;
+    }
+
+    Alert.alert(
+      'Remove broken episodes',
+      `Delete ${brokenEpisodes.length} broken episode${brokenEpisodes.length === 1 ? '' : 's'} from your library?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            for (const episode of brokenEpisodes) {
+              await removeEpisode(episode.id);
+            }
+            setBrokenEpisodeCount(0);
+            Alert.alert('Library cleaned', `Removed ${brokenEpisodes.length} broken episode${brokenEpisodes.length === 1 ? '' : 's'}.`);
+          },
+        },
+      ]
+    );
   };
 
   const handleShowDiagnostics = () => setShowDiagnostics(true);
@@ -341,6 +424,23 @@ export default function SettingsScreen() {
           <SettingRow
             label="Clear diagnostics"
             onPress={handleClearDiagnostics}
+            isLast
+          />
+        </SettingCard>
+
+        <Text style={s.sectionLabel}>LIBRARY HEALTH</Text>
+        <SettingCard>
+          <SettingRow
+            label="Broken episodes"
+            value={brokenEpisodeCount == null ? 'Unknown' : String(brokenEpisodeCount)}
+          />
+          <SettingRow
+            label="Scan library"
+            onPress={() => void scanLibraryIntegrity()}
+          />
+          <SettingRow
+            label="Remove broken episodes"
+            onPress={() => void handleRemoveBrokenEpisodes()}
             isLast
           />
         </SettingCard>
