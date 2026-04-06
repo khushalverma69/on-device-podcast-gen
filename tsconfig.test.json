@@ -11,6 +11,8 @@
   },
   "include": [
     "src/domain/textProcessing.ts",
-    "src/stores/settingsParsing.ts"
+    "src/domain/generationRun.ts",
+    "src/stores/settingsParsing.ts",
+    "src/stores/pipelineRunStore.ts"
   ]
 }

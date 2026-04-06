@@ -8,6 +8,13 @@ import { runPipeline } from '../src/services/pipeline';
 import { useLibraryStore } from '../src/stores/libraryStore';
 import { theme } from '../src/constants/theme';
 import {
+  getGenerationEpisodeTitle,
+  getRecoverablePendingRun,
+  normalizeGenerationRunInput,
+  shouldAutoResumePendingRun,
+  type GenerationRunInput,
+} from '../src/domain/generationRun';
+import {
   clearPendingPipelineRun,
   getPendingPipelineRun,
   savePendingPipelineRun,
@@ -121,6 +128,12 @@ export default function GenerateScreen() {
   const { source, sourceType, topic, sourceText } = useLocalSearchParams<{
     source: string; sourceType: string; topic: string; sourceText?: string;
   }>();
+  const routeInput = normalizeGenerationRunInput({
+    topic,
+    source,
+    sourceType,
+    sourceText,
+  });
 
   const [currentStage, setCurrentStage] = useState(-1);
   const [turns,        setTurns]        = useState<Turn[]>([]);
@@ -134,6 +147,7 @@ export default function GenerateScreen() {
   const doneOpacity= useRef(new Animated.Value(0)).current;
   const addEpisode = useLibraryStore(s => s.addEpisode);
   const turnsRef   = useRef<Turn[]>([]);
+  const currentStageRef = useRef(-1);
 
   useEffect(() => {
     Animated.timing(screenAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
@@ -150,21 +164,12 @@ export default function GenerateScreen() {
     return () => sub.remove();
   }, [isGenerating]);
 
-  async function startRun(runInput?: {
-    topic?: string;
-    source?: string;
-    sourceType?: string;
-    sourceText?: string;
-  }) {
-    const effectiveInput = {
-      topic: runInput?.topic ?? (topic || 'Podcast Episode'),
-      source: runInput?.source ?? (source || ''),
-      sourceType: runInput?.sourceType ?? (sourceType || 'url'),
-      sourceText: runInput?.sourceText ?? (sourceText || ''),
-    };
+  async function startRun(runInput?: GenerationRunInput) {
+    const effectiveInput = normalizeGenerationRunInput(runInput ?? routeInput);
     turnsRef.current = [];
     setTurns([]);
     setCurrentStage(-1);
+    currentStageRef.current = -1;
     setIsGenerating(true);
     setIsDone(false);
     setErrorMessage('');
@@ -176,6 +181,7 @@ export default function GenerateScreen() {
     runPipeline(effectiveInput, {
       onStageChange: (stage) => {
         setCurrentStage(stage);
+        currentStageRef.current = stage;
         void savePendingPipelineRun({
           ...effectiveInput,
           stage,
@@ -201,10 +207,10 @@ export default function GenerateScreen() {
 
         await addEpisode({
           id:              episodeId,
-          title:           topic || source?.split('/').pop() || 'Untitled Episode',
-          topic:           topic || null,
-          sourceName:      source || null,
-          sourceType:      (sourceType as any) || 'url',
+          title:           getGenerationEpisodeTitle(effectiveInput),
+          topic:           effectiveInput.topic || null,
+          sourceName:      effectiveInput.source || null,
+          sourceType:      (effectiveInput.sourceType as any) || 'url',
           mp3Path:         audioPath,
           durationSeconds,
           turns:           turnsRef.current.length,
@@ -218,7 +224,7 @@ export default function GenerateScreen() {
         setErrorMessage(msg);
         void savePendingPipelineRun({
           ...effectiveInput,
-          stage: Math.max(-1, currentStage),
+          stage: Math.max(-1, currentStageRef.current),
           updatedAt: Date.now(),
           lastError: msg,
         });
@@ -229,10 +235,16 @@ export default function GenerateScreen() {
   useEffect(() => {
     void (async () => {
       const pending = await getPendingPipelineRun();
-      if (pending && Date.now() - pending.updatedAt < 1000 * 60 * 30) {
-        setResumeHint(`Found interrupted run at stage ${Math.max(0, pending.stage + 1)}.`);
+      const recoverablePending = getRecoverablePendingRun(pending);
+      if (recoverablePending) {
+        setResumeHint(`Found interrupted run at stage ${Math.max(0, recoverablePending.stage + 1)}.`);
       }
-      await startRun();
+      if (shouldAutoResumePendingRun(routeInput, recoverablePending)) {
+        setResumeHint('');
+        await startRun(recoverablePending);
+        return;
+      }
+      await startRun(routeInput);
     })();
   }, []);
 

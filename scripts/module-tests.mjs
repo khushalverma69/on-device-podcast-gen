@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import * as generationRun from '../.tmp-tests/domain/generationRun.js';
 import * as text from '../.tmp-tests/domain/textProcessing.js';
 import * as settings from '../.tmp-tests/stores/settingsParsing.js';
 
@@ -23,5 +24,28 @@ assert.equal(settings.parseThemeMode('dark'), 'dark');
 assert.equal(settings.parseThemeMode('unknown'), 'light');
 assert.equal(settings.parseBoolean(undefined, true), true);
 assert.equal(settings.parseBoolean('false', true), false);
+
+assert.deepEqual(
+  generationRun.normalizeGenerationRunInput({ topic: '  AI  ', sourceType: undefined }),
+  { topic: 'AI', source: '', sourceType: 'url', sourceText: '' }
+);
+assert.equal(
+  generationRun.getGenerationEpisodeTitle({ source: 'file:///docs/notes.pdf' }),
+  'notes.pdf'
+);
+assert.equal(
+  generationRun.shouldAutoResumePendingRun(
+    { topic: '', source: '', sourceType: 'url', sourceText: '' },
+    { topic: 'Recovered', source: 'file:///draft.pdf', sourceType: 'pdf', stage: 1, updatedAt: Date.now() }
+  ),
+  true
+);
+assert.equal(
+  generationRun.shouldAutoResumePendingRun(
+    { topic: 'Fresh run', source: '', sourceType: 'url', sourceText: '' },
+    { topic: 'Recovered', source: 'file:///draft.pdf', sourceType: 'pdf', stage: 1, updatedAt: Date.now() }
+  ),
+  false
+);
 
 console.log('module-tests: ok');
