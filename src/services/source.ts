@@ -18,12 +18,28 @@ function decodeBase64(input: string): string {
 
 function extractPdfTextFromBinary(binary: string): string {
   const chunks: string[] = [];
-  const re = /\(([^()]{4,})\)\s*Tj/g;
+  const textObjectRe = /BT([\s\S]*?)ET/g;
+  const literalRe = /\(([^()]{2,})\)\s*Tj/g;
+  const hexRe = /<([0-9A-Fa-f\s]{6,})>\s*Tj/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(binary))) {
-    const value = m[1].replace(/\\[nrt]/g, ' ').replace(/\\\(/g, '(').replace(/\\\)/g, ')');
-    if (value.trim()) chunks.push(value.trim());
-    if (chunks.length >= 300) break;
+
+  while ((m = textObjectRe.exec(binary))) {
+    const block = m[1];
+    let lm: RegExpExecArray | null;
+    while ((lm = literalRe.exec(block))) {
+      const value = lm[1].replace(/\\[nrt]/g, ' ').replace(/\\\(/g, '(').replace(/\\\)/g, ')');
+      if (value.trim()) chunks.push(value.trim());
+    }
+    while ((lm = hexRe.exec(block))) {
+      const hex = lm[1].replace(/\s+/g, '');
+      const out: string[] = [];
+      for (let i = 0; i < hex.length - 1; i += 2) {
+        const code = Number.parseInt(hex.slice(i, i + 2), 16);
+        if (Number.isFinite(code) && code >= 32 && code <= 126) out.push(String.fromCharCode(code));
+      }
+      if (out.length > 0) chunks.push(out.join(''));
+    }
+    if (chunks.length >= 600) break;
   }
   return normalizeSourceText(chunks.join(' '));
 }
@@ -63,19 +79,25 @@ async function extractFromFile(uri: string): Promise<string> {
 
 export async function runImageOcr(imageUri: string): Promise<string> {
   try {
+    const imageBase64 = await FileSystem.readAsStringAsync(imageUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
     const form = new FormData();
-    form.append('url', imageUri);
+    form.append('base64Image', `data:image/jpeg;base64,${imageBase64}`);
     form.append('language', 'eng');
     form.append('apikey', 'helloworld');
 
-    const res = await fetch('https://api.ocr.space/parse/image', {
-      method: 'POST',
-      body: form,
-    });
-    if (!res.ok) return '';
-    const data = await res.json();
-    const parsed = data?.ParsedResults?.[0]?.ParsedText as string | undefined;
-    return normalizeSourceText(parsed || '');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch('https://api.ocr.space/parse/image', {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const parsed = data?.ParsedResults?.[0]?.ParsedText as string | undefined;
+      if (parsed?.trim()) return normalizeSourceText(parsed);
+    }
+    return '';
   } catch {
     return '';
   }
