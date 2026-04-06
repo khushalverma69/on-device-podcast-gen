@@ -8,6 +8,7 @@ import { useModelStore, MODELS } from '../../src/stores/modelStore';
 import { useSettingsStore } from '../../src/stores/settingsStore';
 import { useLibraryStore } from '../../src/stores/libraryStore';
 import { theme } from '../../src/constants/theme';
+import { readTelemetry } from '../../src/services/telemetry';
 
 function SettingRow({
   label, value, onPress, isLast, rightElement,
@@ -162,6 +163,19 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleShowDiagnostics = () => {
+    const entries = readTelemetry().slice(-8).reverse();
+    if (entries.length === 0) {
+      Alert.alert('Diagnostics', 'No recent events recorded yet.');
+      return;
+    }
+    const lines = entries.map((entry) => {
+      const time = new Date(entry.ts).toLocaleTimeString('en-US');
+      return `${time} · ${entry.level.toUpperCase()} · ${entry.event}`;
+    });
+    Alert.alert('Diagnostics (recent)', lines.join('\n'));
+  };
+
   const getVoiceName = (id?: string) => {
     const found = VOICE_OPTIONS.find(v => v.id === id);
     return found ? found.name : 'Default';
@@ -241,8 +255,21 @@ export default function SettingsScreen() {
           <Text style={s.privacyLine}>· No network calls during generation</Text>
           <Text style={s.privacyLine}>· No data ever leaves your phone</Text>
           <Text style={s.privacyLine}>· Models stored locally after download</Text>
-          <Text style={s.privacyLine}>· No accounts, no tracking, no telemetry</Text>
+          <Text style={s.privacyLine}>· No accounts, no tracking; local diagnostics only</Text>
         </View>
+
+        <Text style={s.sectionLabel}>DIAGNOSTICS</Text>
+        <SettingCard>
+          <SettingRow
+            label="Recent events"
+            value={`${readTelemetry().length} buffered`}
+          />
+          <SettingRow
+            label="View latest diagnostics"
+            onPress={handleShowDiagnostics}
+            isLast
+          />
+        </SettingCard>
 
         {/* App */}  
         <Text style={s.sectionLabel}>APP</Text>
