@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import type { ScriptLength } from '../types';
 import { setThemeMode as applyThemeMode, type ThemeMode } from '../constants/theme';
+import { parseBoolean, parseNumber, parseScriptLength, parseThemeMode } from './settingsParsing';
 
 const STORE_FILE = (FileSystem.documentDirectory ?? '') + 'settings-store.json';
 
@@ -44,17 +45,6 @@ async function removeItem(k: string): Promise<void> {
 
 const PREFIX = 'private-podcast.settings.';
 const key = (name: string) => `${PREFIX}${name}`;
-
-function parseScriptLength(value?: string | null): ScriptLength {
-  if (value === 'short' || value === 'normal' || value === 'long') return value;
-  return 'normal';
-}
-
-function parseNumber(value?: string | null): number | undefined {
-  if (value == null) return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
 
 type SettingsStoreState = {
   preferredModelId?: string;
@@ -99,9 +89,9 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
         getItem(key('onboardingSeen')),
       ]);
     const pauseParsed = parseNumber(pauseRaw);
-    const themeMode: ThemeMode = themeModeRaw === 'dark' ? 'dark' : 'light';
-    const onboardingAutoAdvance = onboardingAutoRaw !== 'false';
-    const onboardingSeen = onboardingSeenRaw === 'true';
+    const themeMode: ThemeMode = parseThemeMode(themeModeRaw);
+    const onboardingAutoAdvance = parseBoolean(onboardingAutoRaw, true);
+    const onboardingSeen = parseBoolean(onboardingSeenRaw, false);
     set({
       preferredModelId: preferredModelId ?? undefined,
       host1VoiceId:     host1VoiceId ?? undefined,

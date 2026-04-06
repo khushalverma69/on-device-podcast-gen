@@ -45,6 +45,7 @@ function AnimatedExampleCard({ ex, onPress, index }: { ex: any; onPress: () => v
 export default function ImportScreen() {
   const [url,   setUrl]   = useState('');
   const [topic, setTopic] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const screenAnim = useRef(new Animated.Value(0)).current;
   const btnScale   = useRef(new Animated.Value(1)).current;
   const btnGlow    = useRef(new Animated.Value(0.4)).current;
@@ -61,23 +62,30 @@ export default function ImportScreen() {
 
 
   async function handlePickPdf() {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf'],
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
+    try {
+      setIsImporting(true);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
 
-    if (result.canceled || !result.assets?.[0]) return;
+      if (result.canceled || !result.assets?.[0]) return;
 
-    const file = result.assets[0];
-    router.push({
-      pathname: '/generate',
-      params: {
-        source: file.uri,
-        sourceType: 'pdf',
-        topic: file.name?.replace(/\.pdf$/i, '') || 'PDF Episode',
-      },
-    });
+      const file = result.assets[0];
+      router.push({
+        pathname: '/generate',
+        params: {
+          source: file.uri,
+          sourceType: 'pdf',
+          topic: file.name?.replace(/\.pdf$/i, '') || 'PDF Episode',
+        },
+      });
+    } catch {
+      Alert.alert('Import failed', 'Could not open PDF picker. Please try again.');
+    } finally {
+      setIsImporting(false);
+    }
   }
 
   function handleCameraOpen() {
@@ -133,7 +141,7 @@ export default function ImportScreen() {
           <View style={s.optionRow}>
             <Pressable style={s.optionBtn} onPress={handlePickPdf}>
               <Text style={s.optionEmoji}>📄</Text>
-              <Text style={s.optionTxt}>Pick PDF</Text>
+              <Text style={s.optionTxt}>{isImporting ? 'Opening…' : 'Pick PDF'}</Text>
             </Pressable>
             <Pressable style={s.optionBtn} onPress={handleCameraOpen}>
               <Text style={s.optionEmoji}>📷</Text>

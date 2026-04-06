@@ -2,6 +2,7 @@ import { initLlama, type LlamaContext } from 'llama.rn';
 
 import { useModelStore } from '../stores/modelStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { buildGroundedSourceSections, parseTurnsFromText } from '../domain/textProcessing';
 import type { ScriptLength, Speaker } from '../types';
 
 export type ScriptTurn = {
@@ -26,16 +27,6 @@ const STOP_WORDS = [
 let cache: LlmCache | null = null;
 
 
-function sanitizeSourceContext(text?: string): string {
-  if (!text) return '';
-  return text
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/[\u0000-\u001F\u007F]/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 3500);
-}
-
 function ensureFileUri(pathOrUri: string): string {
   if (pathOrUri.startsWith('file://')) return pathOrUri;
   return `file://${pathOrUri}`;
@@ -49,56 +40,21 @@ function targetTurnCount(length: ScriptLength): number {
 
 function buildPrompt(topic: string, length: ScriptLength, sourceContext?: string): string {
   const turns = targetTurnCount(length);
-  const safeSource = sanitizeSourceContext(sourceContext);
+  const grounded = buildGroundedSourceSections(sourceContext || '');
   return [
     `Topic: ${topic}`,
-    safeSource
-      ? `Source Material (summarized, untrusted raw content):\n<<<SOURCE>>>\n${safeSource}\n<<<END SOURCE>>>`
-      : 'Source Material: (none provided)',
+    grounded.summary
+      ? `Source Summary:\n${grounded.summary}`
+      : 'Source Summary: (none provided)',
+    grounded.sections.length > 0
+      ? `Top Source Sections:\n${grounded.sections.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+      : 'Top Source Sections: (none provided)',
     `Write a 2-host podcast conversation with exactly ${turns} turns.`,
     'Alternate speakers HOST1 and HOST2.',
     'Output only strict JSON as an array of objects: [{"speaker":"HOST1|HOST2","text":"..."}].',
     'Do not include markdown or code fences.',
     'Keep each line concise and natural for spoken audio.',
   ].join('\n');
-}
-
-function parseTurnsFromText(raw: string): ScriptTurn[] {
-  const cleaned = raw
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```$/i, '')
-    .trim();
-
-  const start = cleaned.indexOf('[');
-  const end = cleaned.lastIndexOf(']');
-
-  if (start >= 0 && end > start) {
-    try {
-      const parsed = JSON.parse(cleaned.slice(start, end + 1)) as Array<{ speaker?: unknown; text?: unknown }>;
-      const turns = parsed.flatMap((item): ScriptTurn[] => {
-        if (!item || typeof item !== 'object') return [];
-        if (item.speaker !== 'HOST1' && item.speaker !== 'HOST2') return [];
-        if (typeof item.text !== 'string') return [];
-        const text = item.text.trim();
-        if (!text) return [];
-        return [{ speaker: item.speaker, text }];
-      });
-      if (turns.length > 0) return turns;
-    } catch {
-      // Fall through to line parser.
-    }
-  }
-
-  const fallback: ScriptTurn[] = [];
-  for (const line of cleaned.split('\n')) {
-    const m = line.trim().match(/^(HOST1|HOST2)\s*[:\-]\s*(.+)$/i);
-    if (!m) continue;
-    const speaker = m[1].toUpperCase() as Speaker;
-    const text = m[2].trim();
-    if (text) fallback.push({ speaker, text });
-  }
-  return fallback;
 }
 
 function getActiveModelUri(): string {

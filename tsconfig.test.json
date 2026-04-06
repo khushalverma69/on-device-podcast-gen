@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": ".tmp-tests",
+    "module": "nodenext",
+    "target": "ES2021",
+    "skipLibCheck": true,
+    "declaration": false,
+    "moduleResolution": "nodenext",
+    "noEmit": false
+  },
+  "include": [
+    "src/domain/textProcessing.ts",
+    "src/stores/settingsParsing.ts"
+  ]
+}
