@@ -107,13 +107,15 @@ function PulsingOrb() {
 export default function HomeScreen() {
   const episodes   = useLibraryStore(st => st.episodes);
   const setEpisode = usePlayerStore(st => st.setEpisode);
-  const lastEpisodeId = usePlayerStore(st => st.lastEpisodeId);
+  const currentEpisode = usePlayerStore(st => st.currentEpisode);
   const resumeByEpisode = usePlayerStore(st => st.resumeByEpisode);
   const screenAnim = useRef(new Animated.Value(0)).current;
   const scrollY    = useRef(new Animated.Value(0)).current;
   const skeletonOpacity = useRef(new Animated.Value(0.35)).current;
   const [showSkeleton, setShowSkeleton] = useState(true);
-  const continueEpisode = episodes.find((item) => item.id === lastEpisodeId) ?? episodes[0];
+  const continueEpisode = currentEpisode
+    ? episodes.find((item) => item.id === currentEpisode.id) ?? null
+    : null;
 
   useEffect(() => {
     Animated.timing(screenAnim, {

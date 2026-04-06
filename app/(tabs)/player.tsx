@@ -58,11 +58,14 @@ export default function PlayerScreen() {
   const position  = usePlayerStore(st => st.positionSeconds);
   const duration  = usePlayerStore(st => st.durationSeconds);
   const speed     = usePlayerStore(st => st.speed);
+  const playbackError = usePlayerStore(st => st.playbackError);
   const play      = usePlayerStore(st => st.play);
   const pause     = usePlayerStore(st => st.pause);
   const setSpeed  = usePlayerStore(st => st.setSpeed);
   const seekBy    = usePlayerStore(st => st.seekBy);
   const syncProgress = usePlayerStore(st => st.syncProgress);
+  const validateCurrentEpisode = usePlayerStore(st => st.validateCurrentEpisode);
+  const clearEpisodeSelection = usePlayerStore(st => st.clearEpisodeSelection);
   const addBookmark = usePlayerStore(st => st.addBookmark);
   const renameBookmark = usePlayerStore(st => st.renameBookmark);
   const deleteBookmark = usePlayerStore(st => st.deleteBookmark);
@@ -73,6 +76,7 @@ export default function PlayerScreen() {
   const queueEpisodeIds = usePlayerStore(st => st.queueEpisodeIds);
   const queueIndex = usePlayerStore(st => st.queueIndex);
   const episodes = useLibraryStore(st => st.episodes);
+  const removeEpisode = useLibraryStore(st => st.removeEpisode);
   const bookmarks = usePlayerStore(st => st.currentEpisode ? st.bookmarks[st.currentEpisode.id] ?? [] : []);
 
   const screenAnim = useRef(new Animated.Value(0)).current;
@@ -94,6 +98,11 @@ export default function PlayerScreen() {
     }, 1000);
 
     return () => clearInterval(timer);
+  }, [episode?.id]);
+
+  useEffect(() => {
+    if (!episode?.id) return;
+    void validateCurrentEpisode();
   }, [episode?.id]);
 
   useEffect(() => {
@@ -197,41 +206,70 @@ export default function PlayerScreen() {
           </View>
         </View>
 
+        {playbackError ? (
+          <View style={s.errorCard}>
+            <Text style={s.errorTitle}>Audio needs attention</Text>
+            <Text style={s.errorBody}>{playbackError}</Text>
+            <View style={s.errorRow}>
+              <Pressable
+                style={s.errorGhostBtn}
+                onPress={() => {
+                  clearEpisodeSelection();
+                  router.replace('/(tabs)');
+                }}
+              >
+                <Text style={s.errorGhostTxt}>Back to library</Text>
+              </Pressable>
+              <Pressable
+                style={s.errorDangerBtn}
+                onPress={() => {
+                  void removeEpisode(episode.id);
+                  clearEpisodeSelection();
+                  router.replace('/(tabs)');
+                }}
+              >
+                <Text style={s.errorDangerTxt}>Remove episode</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         {/* Controls */}
         <View style={s.controls}>
           <Pressable
             style={[s.queueBtn, queueIndex <= 0 && s.queueBtnDisabled]}
             onPress={() => navigateQueue('prev')}
-            disabled={queueIndex <= 0}
+            disabled={queueIndex <= 0 || Boolean(playbackError)}
           >
             <Text style={s.queueBtnTxt}>⏮</Text>
           </Pressable>
-          <Pressable style={s.skipBtn} onPress={() => void seekBy(-15)}>
+          <Pressable style={[s.skipBtn, playbackError && s.disabledControl]} onPress={() => void seekBy(-15)} disabled={Boolean(playbackError)}>
             <Text style={s.skipNum}>−15</Text>
             <Text style={s.skipSub}>sec</Text>
           </Pressable>
 
           <Pressable
+            disabled={Boolean(playbackError)}
             onPress={() => void (isPlaying ? pause() : play(episode.id))}
             onPressIn={() => Animated.spring(playScale, { toValue: 0.92, useNativeDriver: true, tension: 300, friction: 10 }).start()}
             onPressOut={() => Animated.spring(playScale, { toValue: 1,    useNativeDriver: true, tension: 300, friction: 10 }).start()}
           >
             <Animated.View style={s.playWrap}>
               <Animated.View style={[s.playGlow, { opacity: playGlow }]} />
-              <Animated.View style={[s.playBtn, { transform: [{ scale: playScale }] }]}>
+              <Animated.View style={[s.playBtn, playbackError && s.playBtnDisabled, { transform: [{ scale: playScale }] }]}>
                 <Text style={s.playIcon}>{isPlaying ? '⏸' : '▶'}</Text>
               </Animated.View>
             </Animated.View>
           </Pressable>
 
-          <Pressable style={s.skipBtn} onPress={() => void seekBy(30)}>
+          <Pressable style={[s.skipBtn, playbackError && s.disabledControl]} onPress={() => void seekBy(30)} disabled={Boolean(playbackError)}>
             <Text style={s.skipNum}>+30</Text>
             <Text style={s.skipSub}>sec</Text>
           </Pressable>
           <Pressable
             style={[s.queueBtn, queueIndex >= queueEpisodeIds.length - 1 && s.queueBtnDisabled]}
             onPress={() => navigateQueue('next')}
-            disabled={queueIndex >= queueEpisodeIds.length - 1}
+            disabled={queueIndex >= queueEpisodeIds.length - 1 || Boolean(playbackError)}
           >
             <Text style={s.queueBtnTxt}>⏭</Text>
           </Pressable>
@@ -358,6 +396,17 @@ const s = StyleSheet.create({
   waveform:     { flexDirection: 'row', alignItems: 'center',
                   height: 48, gap: 3, marginBottom: 24, width: '100%', justifyContent: 'center' },
   waveBar:      { width: 4, height: 36, borderRadius: 2 },
+  errorCard:    { width: '100%', backgroundColor: theme.card, borderRadius: 18, padding: 16,
+                  borderWidth: 1, borderColor: theme.coral + '55', marginBottom: 20 },
+  errorTitle:   { color: theme.textPrimary, fontSize: 16, fontWeight: '800', marginBottom: 6 },
+  errorBody:    { color: theme.textSecondary, fontSize: 13, lineHeight: 20 },
+  errorRow:     { flexDirection: 'row', gap: 10, marginTop: 14 },
+  errorGhostBtn:{ flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center',
+                  backgroundColor: theme.background, borderWidth: 1, borderColor: theme.divider },
+  errorGhostTxt:{ color: theme.textPrimary, fontSize: 13, fontWeight: '700' },
+  errorDangerBtn:{ flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center',
+                   backgroundColor: '#FEE2E2' },
+  errorDangerTxt:{ color: '#B91C1C', fontSize: 13, fontWeight: '800' },
   progressCard: { width: '100%', marginBottom: 28 },
   progressBg:   { height: 4, backgroundColor: theme.divider,
                   borderRadius: 2, position: 'relative', overflow: 'visible' },
@@ -384,7 +433,9 @@ const s = StyleSheet.create({
                   alignItems: 'center', justifyContent: 'center',
                   shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.35, shadowRadius: 12, elevation: 8 },
+  playBtnDisabled:{ opacity: 0.5 },
   playIcon:     { color: '#FFF', fontSize: 30 },
+  disabledControl:{ opacity: 0.5 },
   speedCard:    { backgroundColor: theme.card, borderRadius: 18, padding: 18,
                   width: '100%',
                   shadowColor: theme.shadowColor, shadowOffset: { width: 0, height: 2 },

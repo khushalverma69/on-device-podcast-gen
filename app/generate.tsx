@@ -124,6 +124,19 @@ function TurnBubble({ turn, index }: { turn: Turn; index: number }) {
   );
 }
 
+function getErrorTitle(message: string): string {
+  if (/could not (read|extract) enough/i.test(message)) return 'Source needs more readable text';
+  return 'Generation failed';
+}
+
+function getErrorActionHint(message: string): string {
+  if (/camera capture/i.test(message)) return 'Try retaking the photo or going back to add notes.';
+  if (/pdf/i.test(message)) return 'Try a different PDF or switch to a text-rich source.';
+  if (/url/i.test(message)) return 'Try another article URL or paste the article text as notes.';
+  if (/source text/i.test(message)) return 'Go back and add more content before retrying.';
+  return 'You can retry this run, or go back and choose a stronger source.';
+}
+
 export default function GenerateScreen() {
   const { source, sourceType, topic, sourceText } = useLocalSearchParams<{
     source: string; sourceType: string; topic: string; sourceText?: string;
@@ -299,9 +312,18 @@ export default function GenerateScreen() {
         )}
 
         {!isGenerating && !isDone && errorMessage ? (
-          <Pressable style={s.retryBtn} onPress={() => void startRun()}>
-            <Text style={s.retryBtnTxt}>Retry generation</Text>
-          </Pressable>
+          <View style={s.errorCard}>
+            <Text style={s.errorEyebrow}>NEEDS ATTENTION</Text>
+            <Text style={s.errorTitle}>{getErrorTitle(errorMessage)}</Text>
+            <Text style={s.errorBody}>{errorMessage}</Text>
+            <Text style={s.errorHint}>{getErrorActionHint(errorMessage)}</Text>
+            <Pressable style={s.retryBtn} onPress={() => void startRun()}>
+              <Text style={s.retryBtnTxt}>Retry generation</Text>
+            </Pressable>
+            <Pressable style={s.backBtn} onPress={() => router.back()}>
+              <Text style={s.backBtnTxt}>Go back to import</Text>
+            </Pressable>
+          </View>
         ) : null}
 
         {!isGenerating && !isDone && resumeHint ? (
@@ -362,6 +384,14 @@ const s = StyleSheet.create({
   transcriptCard:   { backgroundColor: theme.card, borderRadius: 18, padding: 18,
                       shadowColor: theme.shadowColor, shadowOffset: { width: 0, height: 2 },
                       shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 },
+  errorCard:        { backgroundColor: theme.card, borderRadius: 18, padding: 18,
+                      borderWidth: 1, borderColor: theme.coral + '44',
+                      shadowColor: theme.shadowColor, shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.07, shadowRadius: 10, elevation: 2, gap: 10 },
+  errorEyebrow:     { color: theme.coral, fontSize: 10, fontWeight: '700', letterSpacing: 2 },
+  errorTitle:       { color: theme.textPrimary, fontSize: 18, fontWeight: '800' },
+  errorBody:        { color: theme.textPrimary, fontSize: 14, lineHeight: 21 },
+  errorHint:        { color: theme.textSecondary, fontSize: 12, lineHeight: 18 },
   bubble:           { borderRadius: 14, padding: 12, marginBottom: 8, maxWidth: '88%' },
   bubble1:          { backgroundColor: theme.host1Bg, alignSelf: 'flex-start' },
   bubble2:          { backgroundColor: theme.host2Bg, alignSelf: 'flex-end' },
@@ -372,8 +402,10 @@ const s = StyleSheet.create({
                       shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.35, shadowRadius: 12, elevation: 8 },
   doneBtnTxt:       { color: '#FFF', fontSize: 17, fontWeight: '800' },
-  retryBtn:         { marginTop: 8, borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: theme.primaryLight, borderWidth: 1, borderColor: theme.coral + '55' },
+  retryBtn:         { marginTop: 4, borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: theme.primaryLight, borderWidth: 1, borderColor: theme.coral + '55' },
   retryBtnTxt:      { color: theme.coral, fontWeight: '700', fontSize: 14 },
+  backBtn:          { borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: theme.background, borderWidth: 1, borderColor: theme.divider },
+  backBtnTxt:       { color: theme.textPrimary, fontWeight: '700', fontSize: 14 },
   resumeBtn:        { marginTop: 10, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 12, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.divider },
   resumeBtnTxt:     { color: theme.textSecondary, fontSize: 12, textAlign: 'center' },
 });

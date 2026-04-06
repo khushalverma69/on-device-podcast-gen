@@ -1,14 +1,20 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import TrackPlayer, {
   AppKilledPlaybackBehavior,
   Capability,
   State,
 } from 'react-native-track-player';
+import { trackWarn } from './telemetry';
 
 type EpisodeForPlayback = {
   id: string;
   title: string;
   mp3Path?: string;
 };
+
+export type PlaybackIntegrityResult =
+  | { ok: true; normalizedUri: string }
+  | { ok: false; code: 'missing_path' | 'missing_file' | 'empty_file' | 'unknown'; message: string };
 
 let isSetup = false;
 let loadedTrackId: string | null = null;
@@ -17,6 +23,46 @@ function normalizeAudioUri(pathOrUri: string): string {
   if (pathOrUri.startsWith('file://')) return pathOrUri;
   if (pathOrUri.startsWith('/')) return `file://${pathOrUri}`;
   return pathOrUri;
+}
+
+export async function inspectEpisodeAudio(episode: EpisodeForPlayback): Promise<PlaybackIntegrityResult> {
+  if (!episode.mp3Path) {
+    return {
+      ok: false,
+      code: 'missing_path',
+      message: 'This episode does not have a saved audio file yet.',
+    };
+  }
+
+  const normalizedUri = normalizeAudioUri(episode.mp3Path);
+
+  try {
+    const info = await FileSystem.getInfoAsync(normalizedUri);
+    if (!info.exists) {
+      trackWarn('player.audio_missing', { episodeId: episode.id });
+      return {
+        ok: false,
+        code: 'missing_file',
+        message: 'This episode audio file is missing from device storage.',
+      };
+    }
+    if (typeof info.size === 'number' && info.size <= 0) {
+      trackWarn('player.audio_empty', { episodeId: episode.id });
+      return {
+        ok: false,
+        code: 'empty_file',
+        message: 'This episode audio file looks corrupted or empty.',
+      };
+    }
+    return { ok: true, normalizedUri };
+  } catch {
+    trackWarn('player.audio_check_failed', { episodeId: episode.id });
+    return {
+      ok: false,
+      code: 'unknown',
+      message: 'Could not verify the saved audio for this episode.',
+    };
+  }
 }
 
 async function ensurePlayer(): Promise<void> {
@@ -43,8 +89,9 @@ async function ensurePlayer(): Promise<void> {
 }
 
 async function ensureLoadedTrack(episode: EpisodeForPlayback): Promise<void> {
-  if (!episode.mp3Path) {
-    throw new Error('Episode has no audio file path.');
+  const audio = await inspectEpisodeAudio(episode);
+  if (!audio.ok) {
+    throw new Error(audio.message);
   }
 
   await ensurePlayer();
@@ -58,7 +105,7 @@ async function ensureLoadedTrack(episode: EpisodeForPlayback): Promise<void> {
     id: episode.id,
     title: episode.title,
     artist: 'Private Podcast',
-    url: normalizeAudioUri(episode.mp3Path),
+    url: audio.normalizedUri,
   });
 
   loadedTrackId = episode.id;

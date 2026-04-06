@@ -5,6 +5,7 @@ import {
   normalizeSourceText,
   stripHtmlToText,
 } from '../domain/textProcessing';
+import { validateSourceText } from '../domain/sourceValidation';
 import type { SourceType } from '../types';
 import { trackError, trackWarn } from './telemetry';
 
@@ -175,37 +176,41 @@ export async function buildSourceContext(input: {
 }): Promise<{ inferredTopic: string; sourceContext: string }> {
   const source = input.source?.trim() ?? '';
   const sourceType = (input.sourceType ?? 'url') as SourceType | string;
+  let inferredTopic = input.topic?.trim() || source || 'Podcast Episode';
+  let sourceContext = normalizeSourceText(input.sourceText || '');
 
   if (sourceType === 'camera') {
-    const extracted = await performBasicOcrFromCameraNotes({
+    sourceContext = await performBasicOcrFromCameraNotes({
       imageUri: source,
       ocrText: input.sourceText,
       notes: input.topic,
     });
-    return {
-      inferredTopic: input.topic?.trim() || 'Camera Notes',
-      sourceContext: extracted,
-    };
-  }
-
-  if (sourceType === 'url' && source) {
+    inferredTopic = input.topic?.trim() || 'Camera Notes';
+  } else if (sourceType === 'url' && source) {
     const extracted = await extractFromUrl(source);
-    return {
-      inferredTopic: input.topic?.trim() || extracted.topic,
-      sourceContext: extracted.text,
-    };
+    inferredTopic = input.topic?.trim() || extracted.topic;
+    sourceContext = extracted.text;
+  } else if ((sourceType === 'txt' || sourceType === 'pdf') && source) {
+    sourceContext = await extractFromFile(source);
+    inferredTopic = input.topic?.trim() || source.split('/').pop() || 'Imported file';
   }
 
-  if ((sourceType === 'txt' || sourceType === 'pdf') && source) {
-    const extracted = await extractFromFile(source);
-    return {
-      inferredTopic: input.topic?.trim() || source.split('/').pop() || 'Imported file',
-      sourceContext: extracted,
-    };
+  const validationMessage = validateSourceText({
+    sourceType,
+    source,
+    sourceText: sourceContext,
+  });
+  if (validationMessage) {
+    trackWarn('source.validation_failed', {
+      sourceType,
+      sourceLength: sourceContext.length,
+      sourceWords: sourceContext.trim() ? sourceContext.trim().split(/\s+/).length : 0,
+    });
+    throw new Error(validationMessage);
   }
 
   return {
-    inferredTopic: input.topic?.trim() || source || 'Podcast Episode',
-    sourceContext: normalizeSourceText(input.sourceText || ''),
+    inferredTopic,
+    sourceContext,
   };
 }

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 import * as generationRun from '../.tmp-tests/domain/generationRun.js';
+import * as playerRecovery from '../.tmp-tests/domain/playerRecovery.js';
+import * as sourceValidation from '../.tmp-tests/domain/sourceValidation.js';
 import * as text from '../.tmp-tests/domain/textProcessing.js';
 import * as settings from '../.tmp-tests/stores/settingsParsing.js';
 
@@ -42,10 +44,59 @@ assert.equal(
 );
 assert.equal(
   generationRun.shouldAutoResumePendingRun(
+    { topic: '', source: '', sourceType: 'url', sourceText: '' },
+    { topic: 'Recovered', source: 'file:///draft.pdf', sourceType: 'pdf', stage: 1, updatedAt: Date.now(), lastError: 'Bad PDF' }
+  ),
+  false
+);
+assert.equal(
+  generationRun.shouldAutoResumePendingRun(
     { topic: 'Fresh run', source: '', sourceType: 'url', sourceText: '' },
     { topic: 'Recovered', source: 'file:///draft.pdf', sourceType: 'pdf', stage: 1, updatedAt: Date.now() }
   ),
   false
+);
+assert.equal(sourceValidation.isMeaningfulSourceText('Too short to use.'), false);
+assert.equal(
+  sourceValidation.isMeaningfulSourceText(
+    'This article has enough useful words to describe a topic in a way that gives the podcast generator real material to work from during the script writing stage.'
+  ),
+  true
+);
+assert.match(
+  sourceValidation.getSourceValidationMessage({ sourceType: 'pdf' }),
+  /PDF/i
+);
+assert.equal(
+  sourceValidation.validateSourceText({
+    sourceType: 'camera',
+    sourceText: 'Tiny note',
+  })?.includes('camera capture'),
+  true
+);
+assert.equal(
+  playerRecovery.pickRestorableEpisodeId(
+    [{ id: 'ep-1' }, { id: 'ep-2' }, { id: 'ep-3' }],
+    'ep-2',
+    ['ep-1', 'ep-2']
+  ),
+  'ep-2'
+);
+assert.equal(
+  playerRecovery.pickRestorableEpisodeId(
+    [{ id: 'ep-1' }, { id: 'ep-2' }, { id: 'ep-3' }],
+    'ep-3',
+    ['ep-2']
+  ),
+  'ep-2'
+);
+assert.deepEqual(
+  playerRecovery.filterEpisodeIds(['ep-1', 'ep-2', 'ep-1'], ['ep-2', 'ep-3']),
+  ['ep-2']
+);
+assert.deepEqual(
+  playerRecovery.filterEpisodeMap({ 'ep-1': 10, 'ep-2': 20 }, ['ep-2']),
+  { 'ep-2': 20 }
 );
 
 console.log('module-tests: ok');

@@ -51,5 +51,6 @@ export function shouldAutoResumePendingRun(
 ): pending is PendingPipelineRun {
   const recoverablePending = getRecoverablePendingRun(pending ?? null, now);
   if (!recoverablePending) return false;
+  if (recoverablePending.lastError) return false;
   return !hasMeaningfulGenerationInput(routeInput);
 }
