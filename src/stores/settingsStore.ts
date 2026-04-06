@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
 
-import type { ScriptLength } from '../types';
+import type { ScriptLength, ScriptStyle } from '../types';
+import { setThemeMode as applyThemeMode, type ThemeMode } from '../constants/theme';
+import { parseBoolean, parseNumber, parseScriptLength, parseScriptStyle, parseThemeMode } from './settingsParsing';
 
 const STORE_FILE = (FileSystem.documentDirectory ?? '') + 'settings-store.json';
 
@@ -44,29 +46,26 @@ async function removeItem(k: string): Promise<void> {
 const PREFIX = 'private-podcast.settings.';
 const key = (name: string) => `${PREFIX}${name}`;
 
-function parseScriptLength(value?: string | null): ScriptLength {
-  if (value === 'short' || value === 'normal' || value === 'long') return value;
-  return 'normal';
-}
-
-function parseNumber(value?: string | null): number | undefined {
-  if (value == null) return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 type SettingsStoreState = {
   preferredModelId?: string;
   host1VoiceId?: string;
   host2VoiceId?: string;
   scriptLength: ScriptLength;
+  scriptStyle: ScriptStyle;
   pauseMs: number;
+  themeMode: ThemeMode;
+  onboardingAutoAdvance: boolean;
+  onboardingSeen: boolean;
   hydrate: () => Promise<void>;
   setPreferredModelId: (value?: string) => Promise<void>;
   setHost1VoiceId: (value?: string) => Promise<void>;
   setHost2VoiceId: (value?: string) => Promise<void>;
   setScriptLength: (value: ScriptLength) => Promise<void>;
+  setScriptStyle: (value: ScriptStyle) => Promise<void>;
   setPauseMs: (value: number) => Promise<void>;
+  setThemeMode: (value: ThemeMode) => Promise<void>;
+  setOnboardingAutoAdvance: (value: boolean) => Promise<void>;
+  setOnboardingSeen: (value: boolean) => Promise<void>;
 };
 
 export const useSettingsStore = create<SettingsStoreState>((set) => ({
@@ -74,25 +73,41 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
   host1VoiceId:     undefined,
   host2VoiceId:     undefined,
   scriptLength:     'normal',
+  scriptStyle:      'balanced',
   pauseMs:          400,
+  themeMode:        'light',
+  onboardingAutoAdvance: true,
+  onboardingSeen: false,
 
   hydrate: async () => {
-    const [preferredModelId, host1VoiceId, host2VoiceId, scriptLengthRaw, pauseRaw] =
+    const [preferredModelId, host1VoiceId, host2VoiceId, scriptLengthRaw, scriptStyleRaw, pauseRaw, themeModeRaw, onboardingAutoRaw, onboardingSeenRaw] =
       await Promise.all([
         getItem(key('preferredModelId')),
         getItem(key('host1VoiceId')),
         getItem(key('host2VoiceId')),
         getItem(key('scriptLength')),
+        getItem(key('scriptStyle')),
         getItem(key('pauseMs')),
+        getItem(key('themeMode')),
+        getItem(key('onboardingAutoAdvance')),
+        getItem(key('onboardingSeen')),
       ]);
     const pauseParsed = parseNumber(pauseRaw);
+    const themeMode: ThemeMode = parseThemeMode(themeModeRaw);
+    const onboardingAutoAdvance = parseBoolean(onboardingAutoRaw, true);
+    const onboardingSeen = parseBoolean(onboardingSeenRaw, false);
     set({
       preferredModelId: preferredModelId ?? undefined,
       host1VoiceId:     host1VoiceId ?? undefined,
       host2VoiceId:     host2VoiceId ?? undefined,
       scriptLength:     parseScriptLength(scriptLengthRaw),
+      scriptStyle:      parseScriptStyle(scriptStyleRaw),
       pauseMs:          pauseParsed != null ? Math.max(0, Math.round(pauseParsed)) : 400,
+      themeMode,
+      onboardingAutoAdvance,
+      onboardingSeen,
     });
+    applyThemeMode(themeMode);
   },
 
   setPreferredModelId: async (value) => {
@@ -118,9 +133,31 @@ export const useSettingsStore = create<SettingsStoreState>((set) => ({
     set({ scriptLength: value });
   },
 
+  setScriptStyle: async (value) => {
+    await setItem(key('scriptStyle'), value);
+    set({ scriptStyle: value });
+  },
+
   setPauseMs: async (value) => {
     const normalized = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 400;
     await setItem(key('pauseMs'), String(normalized));
     set({ pauseMs: normalized });
+  },
+
+  setThemeMode: async (value) => {
+    const normalized: ThemeMode = value === 'dark' ? 'dark' : 'light';
+    await setItem(key('themeMode'), normalized);
+    applyThemeMode(normalized);
+    set({ themeMode: normalized });
+  },
+
+  setOnboardingAutoAdvance: async (value) => {
+    await setItem(key('onboardingAutoAdvance'), value ? 'true' : 'false');
+    set({ onboardingAutoAdvance: value });
+  },
+
+  setOnboardingSeen: async (value) => {
+    await setItem(key('onboardingSeen'), value ? 'true' : 'false');
+    set({ onboardingSeen: value });
   },
 }));

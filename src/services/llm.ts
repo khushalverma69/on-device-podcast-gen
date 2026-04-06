@@ -2,6 +2,7 @@ import { initLlama, type LlamaContext } from 'llama.rn';
 
 import { useModelStore } from '../stores/modelStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { buildGroundedSourceSections, parseTurnsFromText } from '../domain/textProcessing';
 import type { ScriptLength, Speaker } from '../types';
 
 export type ScriptTurn = {
@@ -25,6 +26,7 @@ const STOP_WORDS = [
 
 let cache: LlmCache | null = null;
 
+
 function ensureFileUri(pathOrUri: string): string {
   if (pathOrUri.startsWith('file://')) return pathOrUri;
   return `file://${pathOrUri}`;
@@ -36,54 +38,44 @@ function targetTurnCount(length: ScriptLength): number {
   return 20;
 }
 
-function buildPrompt(topic: string, length: ScriptLength): string {
+function styleGuidance(style: ReturnType<typeof useSettingsStore.getState>['scriptStyle']): string {
+  if (style === 'educational') {
+    return 'Style Guidance: Explain concepts clearly, define jargon briefly, and end with practical takeaways.';
+  }
+  if (style === 'storytelling') {
+    return 'Style Guidance: Use a narrative arc with vivid but factual transitions anchored to source details.';
+  }
+  if (style === 'debate') {
+    return 'Style Guidance: Present opposing viewpoints fairly, challenge claims, and resolve with evidence-backed synthesis.';
+  }
+  return 'Style Guidance: Keep tone balanced, conversational, and insight-dense without hype.';
+}
+
+function buildPrompt(topic: string, length: ScriptLength, sourceContext?: string): string {
   const turns = targetTurnCount(length);
+  const grounded = buildGroundedSourceSections(sourceContext || '');
+  const hasSource = grounded.sections.length > 0 || Boolean(grounded.summary);
+  const style = useSettingsStore.getState().scriptStyle;
   return [
     `Topic: ${topic}`,
+    grounded.summary
+      ? `Source Summary:\n${grounded.summary}`
+      : 'Source Summary: (none provided)',
+    grounded.sections.length > 0
+      ? `Top Source Sections:\n${grounded.sections.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+      : 'Top Source Sections: (none provided)',
+    `Style: ${style}`,
+    styleGuidance(style),
     `Write a 2-host podcast conversation with exactly ${turns} turns.`,
     'Alternate speakers HOST1 and HOST2.',
+    hasSource
+      ? 'Grounding Rule: only state concrete facts that are present in Source Summary or Top Source Sections.'
+      : 'Grounding Rule: state uncertainty clearly and avoid specific claims that require a source.',
+    'If a claim cannot be grounded, rephrase it as a question or high-level possibility.',
     'Output only strict JSON as an array of objects: [{"speaker":"HOST1|HOST2","text":"..."}].',
     'Do not include markdown or code fences.',
     'Keep each line concise and natural for spoken audio.',
   ].join('\n');
-}
-
-function parseTurnsFromText(raw: string): ScriptTurn[] {
-  const cleaned = raw
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```$/i, '')
-    .trim();
-
-  const start = cleaned.indexOf('[');
-  const end = cleaned.lastIndexOf(']');
-
-  if (start >= 0 && end > start) {
-    try {
-      const parsed = JSON.parse(cleaned.slice(start, end + 1)) as Array<{ speaker?: unknown; text?: unknown }>;
-      const turns = parsed.flatMap((item): ScriptTurn[] => {
-        if (!item || typeof item !== 'object') return [];
-        if (item.speaker !== 'HOST1' && item.speaker !== 'HOST2') return [];
-        if (typeof item.text !== 'string') return [];
-        const text = item.text.trim();
-        if (!text) return [];
-        return [{ speaker: item.speaker, text }];
-      });
-      if (turns.length > 0) return turns;
-    } catch {
-      // Fall through to line parser.
-    }
-  }
-
-  const fallback: ScriptTurn[] = [];
-  for (const line of cleaned.split('\n')) {
-    const m = line.trim().match(/^(HOST1|HOST2)\s*[:\-]\s*(.+)$/i);
-    if (!m) continue;
-    const speaker = m[1].toUpperCase() as Speaker;
-    const text = m[2].trim();
-    if (text) fallback.push({ speaker, text });
-  }
-  return fallback;
 }
 
 function getActiveModelUri(): string {
@@ -135,7 +127,7 @@ async function getContext(): Promise<LlamaContext> {
   return ctx;
 }
 
-export async function generatePodcastScript(topic: string): Promise<ScriptTurn[]> {
+export async function generatePodcastScript(topic: string, sourceContext?: string): Promise<ScriptTurn[]> {
   const ctx = await getContext();
   const settings = useSettingsStore.getState();
 
@@ -147,7 +139,7 @@ export async function generatePodcastScript(topic: string): Promise<ScriptTurn[]
       },
       {
         role: 'user',
-        content: buildPrompt(topic, settings.scriptLength),
+        content: buildPrompt(topic, settings.scriptLength, sourceContext),
       },
     ],
     n_predict: 1200,

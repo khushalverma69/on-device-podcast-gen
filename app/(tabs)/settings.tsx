@@ -8,6 +8,7 @@ import { useModelStore, MODELS } from '../../src/stores/modelStore';
 import { useSettingsStore } from '../../src/stores/settingsStore';
 import { useLibraryStore } from '../../src/stores/libraryStore';
 import { theme } from '../../src/constants/theme';
+import { readTelemetry } from '../../src/services/telemetry';
 
 function SettingRow({
   label, value, onPress, isLast, rightElement,
@@ -60,8 +61,8 @@ export default function SettingsScreen() {
   const downloaded    = useModelStore(s => s.downloaded);
   
   const { 
-    scriptLength, pauseMs, host1VoiceId, host2VoiceId,
-    setScriptLength, setPauseMs, setHost1VoiceId, setHost2VoiceId 
+    scriptLength, scriptStyle, pauseMs, host1VoiceId, host2VoiceId, themeMode, onboardingAutoAdvance,
+    setScriptLength, setScriptStyle, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode, setOnboardingAutoAdvance, setOnboardingSeen 
   } = useSettingsStore();
   
   const clearLibrary = useLibraryStore(s => s.clearLibrary);
@@ -95,6 +96,16 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleScriptStylePress = () => {
+    Alert.alert('Conversation Style', 'Pick how your generated episode should sound.', [
+      { text: 'Balanced', onPress: () => void setScriptStyle('balanced') },
+      { text: 'Educational', onPress: () => void setScriptStyle('educational') },
+      { text: 'Storytelling', onPress: () => void setScriptStyle('storytelling') },
+      { text: 'Debate', onPress: () => void setScriptStyle('debate') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const handleVoicePress = (hostNum: 1 | 2) => {
     Alert.alert(
       `Host ${hostNum} Voice`,
@@ -109,6 +120,39 @@ export default function SettingsScreen() {
     );
   };
 
+
+  const handleThemeModePress = () => {
+    Alert.alert('Theme mode', 'Choose your preferred appearance', [
+      { text: 'Light', onPress: () => void setThemeMode('light') },
+      { text: 'Dark', onPress: () => void setThemeMode('dark') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+
+  const handleOnboardingAutoAdvance = () => {
+    Alert.alert('Splash auto-advance', 'Automatically enter app after splash animation?', [
+      { text: 'Enabled', onPress: () => void setOnboardingAutoAdvance(true) },
+      { text: 'Disabled', onPress: () => void setOnboardingAutoAdvance(false) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+
+  const handleResetOnboarding = () => {
+    Alert.alert('Reset onboarding', 'Show welcome flow again on next launch?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reset', onPress: () => void setOnboardingSeen(false) },
+    ]);
+  };
+
+  const handleInfoPress = () => {
+    Alert.alert(
+      'How to use',
+      '1) Import URL/PDF\n2) Generate\n3) Open episode in Library\n4) Use Player controls\n5) Manage models/settings here.'
+    );
+  };
+
   const handleClearLibrary = () => {
     Alert.alert('Clear library', 'Delete all generated episodes?', [
       { text: 'Cancel', style: 'cancel' },
@@ -117,6 +161,19 @@ export default function SettingsScreen() {
         Alert.alert('Library Cleared');
       }},
     ]);
+  };
+
+  const handleShowDiagnostics = () => {
+    const entries = readTelemetry().slice(-8).reverse();
+    if (entries.length === 0) {
+      Alert.alert('Diagnostics', 'No recent events recorded yet.');
+      return;
+    }
+    const lines = entries.map((entry) => {
+      const time = new Date(entry.ts).toLocaleTimeString('en-US');
+      return `${time} · ${entry.level.toUpperCase()} · ${entry.event}`;
+    });
+    Alert.alert('Diagnostics (recent)', lines.join('\n'));
   };
 
   const getVoiceName = (id?: string) => {
@@ -163,6 +220,11 @@ export default function SettingsScreen() {
             label="Pause between turns"
             value={`${pauseMs}ms`}
             onPress={handlePausePress}
+          />
+          <SettingRow
+            label="Conversation style"
+            value={scriptStyle.charAt(0).toUpperCase() + scriptStyle.slice(1)}
+            onPress={handleScriptStylePress}
             isLast
           />
         </SettingCard>
@@ -193,15 +255,46 @@ export default function SettingsScreen() {
           <Text style={s.privacyLine}>· No network calls during generation</Text>
           <Text style={s.privacyLine}>· No data ever leaves your phone</Text>
           <Text style={s.privacyLine}>· Models stored locally after download</Text>
-          <Text style={s.privacyLine}>· No accounts, no tracking, no telemetry</Text>
+          <Text style={s.privacyLine}>· No accounts, no tracking; local diagnostics only</Text>
         </View>
+
+        <Text style={s.sectionLabel}>DIAGNOSTICS</Text>
+        <SettingCard>
+          <SettingRow
+            label="Recent events"
+            value={`${readTelemetry().length} buffered`}
+          />
+          <SettingRow
+            label="View latest diagnostics"
+            onPress={handleShowDiagnostics}
+            isLast
+          />
+        </SettingCard>
 
         {/* App */}  
         <Text style={s.sectionLabel}>APP</Text>
         <SettingCard>
           <SettingRow
+            label="Theme mode"
+            value={themeMode === 'dark' ? 'Dark' : 'Light'}
+            onPress={handleThemeModePress}
+          />
+          <SettingRow
+            label="Splash auto-advance"
+            value={onboardingAutoAdvance ? 'Enabled' : 'Disabled'}
+            onPress={handleOnboardingAutoAdvance}
+          />
+          <SettingRow
+            label="How to use"
+            onPress={handleInfoPress}
+          />
+          <SettingRow
+            label="Reset onboarding"
+            onPress={handleResetOnboarding}
+          />
+          <SettingRow
             label="Version"
-            value="1.0.0"
+            value="1.1.0"
           />
           <SettingRow
             label="Clear episode library"
@@ -228,7 +321,7 @@ const s = StyleSheet.create({
   body:         { paddingHorizontal: 16, paddingBottom: 40 },
   sectionLabel: { color: theme.textSecondary, fontSize: 10, fontWeight: '700',
                   letterSpacing: 2, marginTop: 24, marginBottom: 8, paddingHorizontal: 4 },
-  card:         { backgroundColor: theme.card, borderRadius: 18, overflow: 'hidden',
+  card:         { backgroundColor: theme.card, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: theme.border,
                   shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 },
   row:          { flexDirection: 'row', alignItems: 'center',

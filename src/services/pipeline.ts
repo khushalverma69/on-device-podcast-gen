@@ -1,8 +1,12 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { generatePodcastScript } from './llm';
-import { synthesizeScriptToWav } from './tts';
+import { buildSourceContext } from './source';
+import { releaseTts, synthesizeScriptToWav } from './tts';
 import { useModelStore } from '../stores/modelStore';
+import type { SourceType } from '../types';
+import { releaseLlm } from './llm';
+import { trackError, trackEvent } from './telemetry';
 
 export interface PipelineCallbacks {
   onStageChange: (stage: number, label: string) => void;
@@ -25,15 +29,31 @@ function generateId(): string {
 }
 
 export async function runPipeline(
-  topic: string,
+  input: {
+    topic?: string;
+    source?: string;
+    sourceType?: SourceType | string;
+    sourceText?: string;
+  },
   callbacks: PipelineCallbacks,
 ): Promise<void> {
   try {
+    trackEvent('pipeline.start', {
+      sourceType: input.sourceType ?? 'url',
+      hasSource: Boolean(input.source),
+      hasTopic: Boolean(input.topic),
+    });
     callbacks.onStageChange(0, 'Reading document...');
+    const source = await buildSourceContext(input);
+    trackEvent('pipeline.source.ready', {
+      topicLength: source.inferredTopic.length,
+      contextLength: source.sourceContext.length,
+    });
     await sleep(250);
 
     callbacks.onStageChange(1, 'Writing script...');
-    const turns = await generatePodcastScript(topic);
+    const turns = await generatePodcastScript(source.inferredTopic, source.sourceContext);
+    trackEvent('pipeline.script.ready', { turns: turns.length });
     for (const turn of turns) {
       callbacks.onTurn(turn.speaker, turn.text);
       await sleep(40);
@@ -45,6 +65,9 @@ export async function runPipeline(
     await FileSystem.makeDirectoryAsync(podcastsDir, { intermediates: true });
     const wavPath = `${podcastsDir}${episodeId}.wav`;
     const ttsResult = await synthesizeScriptToWav(turns, wavPath);
+    trackEvent('pipeline.tts.ready', {
+      durationSeconds: ttsResult.durationSeconds,
+    });
 
     callbacks.onStageChange(3, 'Assembling audio...');
     await sleep(200);
@@ -56,7 +79,15 @@ export async function runPipeline(
       durationSeconds: Math.max(1, Math.round(ttsResult.durationSeconds)),
       modelUsed,
     });
+    trackEvent('pipeline.complete', { episodeId, modelUsed });
   } catch (e: any) {
+    trackError('pipeline.error', {
+      message: e?.message ?? 'Pipeline failed',
+      sourceType: input.sourceType ?? 'url',
+    });
     callbacks.onError(e?.message ?? 'Pipeline failed');
+  } finally {
+    // Release heavyweight contexts between runs to reduce memory pressure on low-end devices.
+    await Promise.allSettled([releaseLlm(), releaseTts()]);
   }
 }
