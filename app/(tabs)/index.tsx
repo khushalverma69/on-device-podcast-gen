@@ -5,6 +5,7 @@ import {
   StyleSheet, Text, View, Dimensions,
 } from 'react-native';
 import { useLibraryStore } from '../../src/stores/libraryStore';
+import { usePlayerStore } from '../../src/stores/playerStore';
 import { theme } from '../../src/constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -103,8 +104,12 @@ function PulsingOrb() {
 
 export default function HomeScreen() {
   const episodes   = useLibraryStore(st => st.episodes);
+  const setEpisode = usePlayerStore(st => st.setEpisode);
+  const lastEpisodeId = usePlayerStore(st => st.lastEpisodeId);
+  const resumeByEpisode = usePlayerStore(st => st.resumeByEpisode);
   const screenAnim = useRef(new Animated.Value(0)).current;
   const scrollY    = useRef(new Animated.Value(0)).current;
+  const continueEpisode = episodes.find((item) => item.id === lastEpisodeId) ?? episodes[0];
 
   useEffect(() => {
     Animated.timing(screenAnim, {
@@ -161,6 +166,32 @@ export default function HomeScreen() {
         ]}
       >
         <View style={{ height: HEADER_HEIGHT + 12 }} />
+        {continueEpisode ? (
+          <Pressable
+            style={s.continueCard}
+            onPress={() => {
+              setEpisode({
+                id: continueEpisode.id,
+                title: continueEpisode.title,
+                mp3Path: continueEpisode.mp3Path,
+                durationSeconds: continueEpisode.durationSeconds ?? 0,
+                modelUsed: continueEpisode.modelUsed ?? undefined,
+                turns: continueEpisode.turns ?? 0,
+                createdAt: continueEpisode.createdAt,
+              });
+              router.push('/(tabs)/player');
+            }}
+          >
+            <View>
+              <Text style={s.continueLabel}>CONTINUE LISTENING</Text>
+              <Text style={s.continueTitle} numberOfLines={1}>{continueEpisode.title}</Text>
+              <Text style={s.continueMeta}>
+                Resume at {formatDuration(Math.round(resumeByEpisode[continueEpisode.id] ?? 0))}
+              </Text>
+            </View>
+            <Text style={s.continueArrow}>▶</Text>
+          </Pressable>
+        ) : null}
 
         {episodes.length === 0 ? (
           <View style={s.empty}>
@@ -274,6 +305,11 @@ const s = StyleSheet.create({
   scrollContent:{ paddingHorizontal: 16, paddingBottom: 110 },
   scrollEmpty:  { flex: 1 },
   list:         { gap: 10 },
+  continueCard: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.divider, borderRadius: 16, padding: 14, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  continueLabel:{ color: theme.textSecondary, fontSize: 10, letterSpacing: 1.4, fontWeight: '700', marginBottom: 4 },
+  continueTitle:{ color: theme.textPrimary, fontSize: 15, fontWeight: '700', maxWidth: width - 120 },
+  continueMeta: { color: theme.primary, fontSize: 12, marginTop: 4, fontWeight: '600' },
+  continueArrow:{ color: theme.primary, fontSize: 20, fontWeight: '700' },
   card:         { backgroundColor: theme.card, borderRadius: 18, flexDirection: 'row',
                   alignItems: 'center', padding: 16, overflow: 'hidden',
                   shadowColor: theme.shadowColor, shadowOffset: { width: 0, height: 2 },

@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, Pressable, StyleSheet,
-  ScrollView, Animated,
+  ScrollView, Animated, Modal, TextInput,
 } from 'react-native';
 import { usePlayerStore } from '../../src/stores/playerStore';
+import { useLibraryStore } from '../../src/stores/libraryStore';
 import { theme } from '../../src/constants/theme';
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -61,11 +62,22 @@ export default function PlayerScreen() {
   const seekBy    = usePlayerStore(st => st.seekBy);
   const syncProgress = usePlayerStore(st => st.syncProgress);
   const addBookmark = usePlayerStore(st => st.addBookmark);
+  const renameBookmark = usePlayerStore(st => st.renameBookmark);
+  const deleteBookmark = usePlayerStore(st => st.deleteBookmark);
+  const setEpisode = usePlayerStore(st => st.setEpisode);
+  const setQueue = usePlayerStore(st => st.setQueue);
+  const playNextInQueue = usePlayerStore(st => st.playNextInQueue);
+  const playPrevInQueue = usePlayerStore(st => st.playPrevInQueue);
+  const queueEpisodeIds = usePlayerStore(st => st.queueEpisodeIds);
+  const queueIndex = usePlayerStore(st => st.queueIndex);
+  const episodes = useLibraryStore(st => st.episodes);
   const bookmarks = usePlayerStore(st => st.currentEpisode ? st.bookmarks[st.currentEpisode.id] ?? [] : []);
 
   const screenAnim = useRef(new Animated.Value(0)).current;
   const playScale  = useRef(new Animated.Value(1)).current;
   const playGlow   = useRef(new Animated.Value(0.4)).current;
+  const [editingBookmarkId, setEditingBookmarkId] = useState('');
+  const [editingLabel, setEditingLabel] = useState('');
 
   useEffect(() => {
     Animated.timing(screenAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
@@ -96,12 +108,34 @@ export default function PlayerScreen() {
     }
   }, [isPlaying]);
 
+  useEffect(() => {
+    if (!episode?.id) return;
+    const episodeIds = episodes.map((item) => item.id);
+    setQueue(episodeIds, episode.id);
+  }, [episode?.id, episodes.length]);
+
   const progress = duration > 0 ? position / duration : 0;
 
   function formatTime(sec: number): string {
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function navigateQueue(direction: 'next' | 'prev') {
+    const nextId = direction === 'next' ? playNextInQueue() : playPrevInQueue();
+    if (!nextId) return;
+    const nextEpisode = episodes.find((item) => item.id === nextId);
+    if (!nextEpisode) return;
+    setEpisode({
+      id: nextEpisode.id,
+      title: nextEpisode.title,
+      mp3Path: nextEpisode.mp3Path,
+      durationSeconds: nextEpisode.durationSeconds ?? 0,
+      modelUsed: nextEpisode.modelUsed ?? undefined,
+      turns: nextEpisode.turns ?? 0,
+      createdAt: nextEpisode.createdAt,
+    });
   }
 
   if (!episode) {
@@ -165,6 +199,13 @@ export default function PlayerScreen() {
 
         {/* Controls */}
         <View style={s.controls}>
+          <Pressable
+            style={[s.queueBtn, queueIndex <= 0 && s.queueBtnDisabled]}
+            onPress={() => navigateQueue('prev')}
+            disabled={queueIndex <= 0}
+          >
+            <Text style={s.queueBtnTxt}>⏮</Text>
+          </Pressable>
           <Pressable style={s.skipBtn} onPress={() => void seekBy(-15)}>
             <Text style={s.skipNum}>−15</Text>
             <Text style={s.skipSub}>sec</Text>
@@ -186,6 +227,13 @@ export default function PlayerScreen() {
           <Pressable style={s.skipBtn} onPress={() => void seekBy(30)}>
             <Text style={s.skipNum}>+30</Text>
             <Text style={s.skipSub}>sec</Text>
+          </Pressable>
+          <Pressable
+            style={[s.queueBtn, queueIndex >= queueEpisodeIds.length - 1 && s.queueBtnDisabled]}
+            onPress={() => navigateQueue('next')}
+            disabled={queueIndex >= queueEpisodeIds.length - 1}
+          >
+            <Text style={s.queueBtnTxt}>⏭</Text>
           </Pressable>
         </View>
 
@@ -219,13 +267,61 @@ export default function PlayerScreen() {
               <Text style={s.bookmarkEmpty}>No bookmarks yet</Text>
             ) : (
               bookmarks.map((sec) => (
-                <Pressable key={sec} style={s.bookmarkChip} onPress={() => void seekBy(sec - position)}>
-                  <Text style={s.bookmarkChipTxt}>{formatTime(sec)}</Text>
+                <Pressable
+                  key={sec.id}
+                  style={s.bookmarkChip}
+                  onPress={() => void seekBy(sec.seconds - position)}
+                  onLongPress={() => {
+                    setEditingBookmarkId(sec.id);
+                    setEditingLabel(sec.label);
+                  }}
+                >
+                  <Text style={s.bookmarkChipTxt}>{sec.label}</Text>
                 </Pressable>
               ))
             )}
           </View>
         </View>
+
+        <Modal visible={Boolean(editingBookmarkId)} transparent animationType="fade">
+          <View style={s.modalBackdrop}>
+            <View style={s.modalCard}>
+              <Text style={s.modalTitle}>Edit bookmark</Text>
+              <TextInput
+                value={editingLabel}
+                onChangeText={setEditingLabel}
+                placeholder="Bookmark label"
+                placeholderTextColor={theme.textSecondary}
+                style={s.modalInput}
+              />
+              <View style={s.modalRow}>
+                <Pressable style={s.modalGhostBtn} onPress={() => setEditingBookmarkId('')}>
+                  <Text style={s.modalGhostTxt}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={s.modalDangerBtn}
+                  onPress={() => {
+                    if (editingBookmarkId) deleteBookmark(editingBookmarkId);
+                    setEditingBookmarkId('');
+                    setEditingLabel('');
+                  }}
+                >
+                  <Text style={s.modalDangerTxt}>Delete</Text>
+                </Pressable>
+                <Pressable
+                  style={s.modalSaveBtn}
+                  onPress={() => {
+                    if (editingBookmarkId) renameBookmark(editingBookmarkId, editingLabel);
+                    setEditingBookmarkId('');
+                    setEditingLabel('');
+                  }}
+                >
+                  <Text style={s.modalSaveTxt}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
       </ScrollView>
     </Animated.View>
@@ -282,6 +378,9 @@ const s = StyleSheet.create({
   timeRow:      { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
   timeTxt:      { color: theme.textSecondary, fontSize: 12 },
   controls:     { flexDirection: 'row', alignItems: 'center', gap: 36, marginBottom: 32 },
+  queueBtn:     { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.card },
+  queueBtnDisabled:{ opacity: 0.4 },
+  queueBtnTxt:  { color: theme.textPrimary, fontSize: 15, fontWeight: '700' },
   skipBtn:      { alignItems: 'center', width: 50 },
   skipNum:      { color: theme.textPrimary, fontSize: 18, fontWeight: '700' },
   skipSub:      { color: theme.textSecondary, fontSize: 10, letterSpacing: 0.5 },
@@ -315,4 +414,15 @@ const s = StyleSheet.create({
   bookmarkChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primaryLight },
   bookmarkChipTxt:{ color: theme.primary, fontWeight: '600', fontSize: 12 },
   bookmarkEmpty:{ color: theme.textSecondary, fontSize: 12 },
+  modalBackdrop:{ flex: 1, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalCard:    { width: '100%', maxWidth: 360, backgroundColor: theme.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: theme.divider },
+  modalTitle:   { color: theme.textPrimary, fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  modalInput:   { borderWidth: 1, borderColor: theme.divider, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, color: theme.textPrimary, marginBottom: 12 },
+  modalRow:     { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  modalGhostBtn:{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: theme.background },
+  modalGhostTxt:{ color: theme.textSecondary, fontWeight: '600' },
+  modalDangerBtn:{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#FEE2E2' },
+  modalDangerTxt:{ color: '#B91C1C', fontWeight: '700' },
+  modalSaveBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: theme.primaryLight },
+  modalSaveTxt: { color: theme.primary, fontWeight: '700' },
 });

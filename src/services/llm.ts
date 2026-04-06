@@ -38,9 +38,24 @@ function targetTurnCount(length: ScriptLength): number {
   return 20;
 }
 
+function styleGuidance(style: ReturnType<typeof useSettingsStore.getState>['scriptStyle']): string {
+  if (style === 'educational') {
+    return 'Style Guidance: Explain concepts clearly, define jargon briefly, and end with practical takeaways.';
+  }
+  if (style === 'storytelling') {
+    return 'Style Guidance: Use a narrative arc with vivid but factual transitions anchored to source details.';
+  }
+  if (style === 'debate') {
+    return 'Style Guidance: Present opposing viewpoints fairly, challenge claims, and resolve with evidence-backed synthesis.';
+  }
+  return 'Style Guidance: Keep tone balanced, conversational, and insight-dense without hype.';
+}
+
 function buildPrompt(topic: string, length: ScriptLength, sourceContext?: string): string {
   const turns = targetTurnCount(length);
   const grounded = buildGroundedSourceSections(sourceContext || '');
+  const hasSource = grounded.sections.length > 0 || Boolean(grounded.summary);
+  const style = useSettingsStore.getState().scriptStyle;
   return [
     `Topic: ${topic}`,
     grounded.summary
@@ -49,9 +64,14 @@ function buildPrompt(topic: string, length: ScriptLength, sourceContext?: string
     grounded.sections.length > 0
       ? `Top Source Sections:\n${grounded.sections.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
       : 'Top Source Sections: (none provided)',
-    `Style: ${useSettingsStore.getState().scriptStyle}`,
+    `Style: ${style}`,
+    styleGuidance(style),
     `Write a 2-host podcast conversation with exactly ${turns} turns.`,
     'Alternate speakers HOST1 and HOST2.',
+    hasSource
+      ? 'Grounding Rule: only state concrete facts that are present in Source Summary or Top Source Sections.'
+      : 'Grounding Rule: state uncertainty clearly and avoid specific claims that require a source.',
+    'If a claim cannot be grounded, rephrase it as a question or high-level possibility.',
     'Output only strict JSON as an array of objects: [{"speaker":"HOST1|HOST2","text":"..."}].',
     'Do not include markdown or code fences.',
     'Keep each line concise and natural for spoken audio.',

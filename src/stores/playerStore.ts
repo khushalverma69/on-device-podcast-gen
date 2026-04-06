@@ -21,14 +21,23 @@ interface Episode {
   createdAt?:      number;
 }
 
+export type EpisodeBookmark = {
+  id: string;
+  seconds: number;
+  label: string;
+};
+
 type PlayerState = {
   currentEpisode:   Episode | null;
   isPlaying:        boolean;
   positionSeconds:  number;
   durationSeconds:  number;
   speed:            number;
+  lastEpisodeId?:   string;
   resumeByEpisode:  Record<string, number>;
-  bookmarks:        Record<string, number[]>;
+  bookmarks:        Record<string, EpisodeBookmark[]>;
+  queueEpisodeIds:  string[];
+  queueIndex:       number;
   play:             (episodeId: string) => Promise<void>;
   pause:            () => Promise<void>;
   setSpeed:         (speed: number) => Promise<void>;
@@ -37,6 +46,11 @@ type PlayerState = {
   setProgress:      (position: number, duration: number) => void;
   setEpisode:       (episode: Episode) => void;
   addBookmark:      () => void;
+  renameBookmark:   (bookmarkId: string, label: string) => void;
+  deleteBookmark:   (bookmarkId: string) => void;
+  setQueue:         (episodeIds: string[], currentEpisodeId?: string) => void;
+  playNextInQueue:  () => string | null;
+  playPrevInQueue:  () => string | null;
 };
 
 export const usePlayerStore = create<PlayerState>()(
@@ -47,8 +61,11 @@ export const usePlayerStore = create<PlayerState>()(
       positionSeconds: 0,
       durationSeconds: 0,
       speed:           1,
+      lastEpisodeId:   undefined,
       resumeByEpisode: {},
       bookmarks:       {},
+      queueEpisodeIds: [],
+      queueIndex:      -1,
 
       play: async (episodeId: string) => {
         const { currentEpisode } = get();
@@ -129,6 +146,8 @@ export const usePlayerStore = create<PlayerState>()(
       setEpisode: (episode) =>
         set((state) => ({
           currentEpisode: episode,
+          lastEpisodeId: episode.id,
+          queueIndex: state.queueEpisodeIds.findIndex((id) => id === episode.id),
           positionSeconds: state.resumeByEpisode[episode.id] ?? 0,
           durationSeconds: episode.durationSeconds ?? 0,
           isPlaying: false,
@@ -139,17 +158,87 @@ export const usePlayerStore = create<PlayerState>()(
           const id = state.currentEpisode?.id;
           if (!id) return state;
           const current = state.bookmarks[id] ?? [];
-          const next = [...current, Math.round(state.positionSeconds)].sort((a, b) => a - b);
-          return { bookmarks: { ...state.bookmarks, [id]: Array.from(new Set(next)) } } as any;
+          const seconds = Math.round(state.positionSeconds);
+          if (current.some((bookmark) => bookmark.seconds === seconds)) return state;
+          const next = [
+            ...current,
+            {
+              id: `bm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+              seconds,
+              label: `At ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
+            },
+          ].sort((a, b) => a.seconds - b.seconds);
+          return { bookmarks: { ...state.bookmarks, [id]: next } } as any;
         }),
+
+      renameBookmark: (bookmarkId, label) =>
+        set((state) => {
+          const episodeId = state.currentEpisode?.id;
+          if (!episodeId) return state;
+          const nextLabel = label.trim();
+          if (!nextLabel) return state;
+          const current = state.bookmarks[episodeId] ?? [];
+          return {
+            bookmarks: {
+              ...state.bookmarks,
+              [episodeId]: current.map((bookmark) =>
+                bookmark.id === bookmarkId ? { ...bookmark, label: nextLabel } : bookmark
+              ),
+            },
+          } as any;
+        }),
+
+      deleteBookmark: (bookmarkId) =>
+        set((state) => {
+          const episodeId = state.currentEpisode?.id;
+          if (!episodeId) return state;
+          const current = state.bookmarks[episodeId] ?? [];
+          return {
+            bookmarks: {
+              ...state.bookmarks,
+              [episodeId]: current.filter((bookmark) => bookmark.id !== bookmarkId),
+            },
+          } as any;
+        }),
+
+      setQueue: (episodeIds, currentEpisodeId) =>
+        set(() => {
+          const queue = Array.from(new Set(episodeIds.filter(Boolean)));
+          const queueIndex =
+            currentEpisodeId != null ? queue.findIndex((id) => id === currentEpisodeId) : -1;
+          return { queueEpisodeIds: queue, queueIndex };
+        }),
+
+      playNextInQueue: () => {
+        const state = get();
+        if (state.queueIndex < 0) return null;
+        const nextIndex = state.queueIndex + 1;
+        const nextId = state.queueEpisodeIds[nextIndex];
+        if (!nextId) return null;
+        set({ queueIndex: nextIndex, lastEpisodeId: nextId });
+        return nextId;
+      },
+
+      playPrevInQueue: () => {
+        const state = get();
+        if (state.queueIndex <= 0) return null;
+        const prevIndex = state.queueIndex - 1;
+        const prevId = state.queueEpisodeIds[prevIndex];
+        if (!prevId) return null;
+        set({ queueIndex: prevIndex, lastEpisodeId: prevId });
+        return prevId;
+      },
     }),
     {
       name: 'private-podcast-player-state',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         speed: state.speed,
+        lastEpisodeId: state.lastEpisodeId,
         resumeByEpisode: state.resumeByEpisode,
         bookmarks: state.bookmarks,
+        queueEpisodeIds: state.queueEpisodeIds,
+        queueIndex: state.queueIndex,
       }),
     }
   )
