@@ -15,4 +15,4 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
+      - run: npm run qa

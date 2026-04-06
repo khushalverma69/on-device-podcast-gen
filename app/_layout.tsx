@@ -8,6 +8,7 @@ import { initDb } from '../src/db/schema';
 import { theme } from '../src/constants/theme';
 import { useLibraryStore } from '../src/stores/libraryStore';
 import { useSettingsStore } from '../src/stores/settingsStore';
+import { ThemeProvider } from '../src/providers/themeProvider';
 
 export default function RootLayout() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -50,7 +51,8 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <ThemeProvider>
+      <>
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
       <Stack key={themeMode}
         screenOptions={{
@@ -67,5 +69,6 @@ export default function RootLayout() {
         <Stack.Screen name="episode/[id]" options={{ title: 'Episode' }} />
       </Stack>
     </>
+    </ThemeProvider>
   );
 }

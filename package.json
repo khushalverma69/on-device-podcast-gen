@@ -8,7 +8,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "qa": "npm run typecheck"
+    "qa": "npm run typecheck && node scripts/unit-checks.cjs",
+    "test:unit": "node scripts/unit-checks.cjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

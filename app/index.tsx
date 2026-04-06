@@ -79,7 +79,7 @@ export default function WelcomeScreen() {
 
       <Animated.View style={[s.card, { opacity: cardOpacity, transform: [{ translateY: cardSlide }] }]}> 
         <Text style={s.badge}>ON-DEVICE PODCASTS</Text>
-        <Text style={s.subtitle}>Create private podcasts from links and PDFs with smooth local playback.</Text>
+        <Text style={s.subtitle}>Create private podcasts from links, PDFs, and camera captures. First launch can auto-enter studio (toggle in Settings).</Text>
 
         <Pressable style={s.primaryBtn} onPress={() => { void setOnboardingSeen(true); router.replace('/(tabs)'); }}>
           <Text style={s.primaryBtnTxt}>Enter Studio</Text>

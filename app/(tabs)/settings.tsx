@@ -61,7 +61,7 @@ export default function SettingsScreen() {
   
   const { 
     scriptLength, pauseMs, host1VoiceId, host2VoiceId, themeMode, onboardingAutoAdvance,
-    setScriptLength, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode, setOnboardingAutoAdvance 
+    setScriptLength, setPauseMs, setHost1VoiceId, setHost2VoiceId, setThemeMode, setOnboardingAutoAdvance, setOnboardingSeen 
   } = useSettingsStore();
   
   const clearLibrary = useLibraryStore(s => s.clearLibrary);
@@ -124,6 +124,14 @@ export default function SettingsScreen() {
       { text: 'Enabled', onPress: () => void setOnboardingAutoAdvance(true) },
       { text: 'Disabled', onPress: () => void setOnboardingAutoAdvance(false) },
       { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+
+  const handleResetOnboarding = () => {
+    Alert.alert('Reset onboarding', 'Show welcome flow again on next launch?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reset', onPress: () => void setOnboardingSeen(false) },
     ]);
   };
 
@@ -237,6 +245,10 @@ export default function SettingsScreen() {
           <SettingRow
             label="How to use"
             onPress={handleInfoPress}
+          />
+          <SettingRow
+            label="Reset onboarding"
+            onPress={handleResetOnboarding}
           />
           <SettingRow
             label="Version"

@@ -25,6 +25,17 @@ const STOP_WORDS = [
 
 let cache: LlmCache | null = null;
 
+
+function sanitizeSourceContext(text?: string): string {
+  if (!text) return '';
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 3500);
+}
+
 function ensureFileUri(pathOrUri: string): string {
   if (pathOrUri.startsWith('file://')) return pathOrUri;
   return `file://${pathOrUri}`;
@@ -38,9 +49,12 @@ function targetTurnCount(length: ScriptLength): number {
 
 function buildPrompt(topic: string, length: ScriptLength, sourceContext?: string): string {
   const turns = targetTurnCount(length);
+  const safeSource = sanitizeSourceContext(sourceContext);
   return [
     `Topic: ${topic}`,
-    sourceContext ? `Source Material: ${sourceContext}` : 'Source Material: (none provided)',
+    safeSource
+      ? `Source Material (summarized, untrusted raw content):\n<<<SOURCE>>>\n${safeSource}\n<<<END SOURCE>>>`
+      : 'Source Material: (none provided)',
     `Write a 2-host podcast conversation with exactly ${turns} turns.`,
     'Alternate speakers HOST1 and HOST2.',
     'Output only strict JSON as an array of objects: [{"speaker":"HOST1|HOST2","text":"..."}].',
