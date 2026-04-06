@@ -1,19 +1,53 @@
 import { Stack, router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../src/constants/theme';
 
+const STEPS = [
+  'Tap Import to add a URL, pick a PDF, or use quick examples.',
+  'Press Generate Podcast and wait for the four pipeline stages to complete.',
+  'Open your episode in Library, then use Player controls (play, seek, speed).',
+  'Use Settings to manage models, voices, script length, pause, and theme mode.',
+];
+
 export default function InfoScreen() {
+  const reveal = useRef(STEPS.map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    Animated.stagger(
+      90,
+      reveal.map((a) =>
+        Animated.timing(a, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        })
+      )
+    ).start();
+  }, []);
+
   return (
     <>
       <Stack.Screen options={{ title: 'How to use' }} />
       <ScrollView contentContainerStyle={s.body}>
         <Text style={s.title}>How to use PodCraft Private</Text>
 
-        <Step n="1" text="Tap Import to add a URL, pick a PDF, or use quick examples." />
-        <Step n="2" text="Press Generate Podcast and wait for the four pipeline stages to complete." />
-        <Step n="3" text="Open your episode in Library, then use Player controls (play, seek, speed)." />
-        <Step n="4" text="Use Settings to manage models, voices, script length, pause, and theme mode." />
+        {STEPS.map((step, idx) => (
+          <Animated.View
+            key={step}
+            style={{
+              opacity: reveal[idx],
+              transform: [
+                {
+                  translateY: reveal[idx].interpolate({ inputRange: [0, 1], outputRange: [14, 0] }),
+                },
+              ],
+            }}
+          >
+            <Step n={String(idx + 1)} text={step} />
+          </Animated.View>
+        ))}
 
         <View style={s.tipCard}>
           <Text style={s.tipTitle}>Tip</Text>
