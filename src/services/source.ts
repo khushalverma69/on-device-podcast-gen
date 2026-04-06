@@ -16,11 +16,46 @@ function decodeBase64(input: string): string {
   }
 }
 
+function decodePdfHexText(hex: string): string {
+  const compact = hex.replace(/\s+/g, '');
+  if (!compact) return '';
+  const bytes: number[] = [];
+  for (let i = 0; i < compact.length - 1; i += 2) {
+    const code = Number.parseInt(compact.slice(i, i + 2), 16);
+    if (Number.isFinite(code)) bytes.push(code);
+  }
+  if (bytes.length < 2) return '';
+
+  // UTF-16 BOM paths.
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    const chars: string[] = [];
+    for (let i = 2; i + 1 < bytes.length; i += 2) {
+      chars.push(String.fromCharCode((bytes[i] << 8) | bytes[i + 1]));
+    }
+    return chars.join('');
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    const chars: string[] = [];
+    for (let i = 2; i + 1 < bytes.length; i += 2) {
+      chars.push(String.fromCharCode((bytes[i + 1] << 8) | bytes[i]));
+    }
+    return chars.join('');
+  }
+
+  // Fallback single-byte extraction for ASCII-ish content.
+  return bytes
+    .filter((b) => b >= 32 && b <= 126)
+    .map((b) => String.fromCharCode(b))
+    .join('');
+}
+
 function extractPdfTextFromBinary(binary: string): string {
   const chunks: string[] = [];
   const textObjectRe = /BT([\s\S]*?)ET/g;
   const literalRe = /\(([^()]{2,})\)\s*Tj/g;
-  const hexRe = /<([0-9A-Fa-f\s]{6,})>\s*Tj/g;
+  const literalArrayRe = /\[(.*?)\]\s*TJ/g;
+  const hexRe = /<([0-9A-Fa-f\s]{4,})>\s*Tj/g;
+  const hexArrayRe = /\[\s*((?:<[0-9A-Fa-f\s]+>\s*)+)\]\s*TJ/g;
   let m: RegExpExecArray | null;
 
   while ((m = textObjectRe.exec(binary))) {
@@ -30,14 +65,24 @@ function extractPdfTextFromBinary(binary: string): string {
       const value = lm[1].replace(/\\[nrt]/g, ' ').replace(/\\\(/g, '(').replace(/\\\)/g, ')');
       if (value.trim()) chunks.push(value.trim());
     }
+    while ((lm = literalArrayRe.exec(block))) {
+      const values = lm[1].match(/\(([^()]{2,})\)/g) ?? [];
+      const joined = values
+        .map((raw) => raw.slice(1, -1).replace(/\\[nrt]/g, ' ').replace(/\\\(/g, '(').replace(/\\\)/g, ')'))
+        .join(' ');
+      if (joined.trim()) chunks.push(joined.trim());
+    }
     while ((lm = hexRe.exec(block))) {
-      const hex = lm[1].replace(/\s+/g, '');
-      const out: string[] = [];
-      for (let i = 0; i < hex.length - 1; i += 2) {
-        const code = Number.parseInt(hex.slice(i, i + 2), 16);
-        if (Number.isFinite(code) && code >= 32 && code <= 126) out.push(String.fromCharCode(code));
-      }
-      if (out.length > 0) chunks.push(out.join(''));
+      const decoded = decodePdfHexText(lm[1]);
+      if (decoded.trim()) chunks.push(decoded.trim());
+    }
+    while ((lm = hexArrayRe.exec(block))) {
+      const values = lm[1].match(/<([0-9A-Fa-f\s]+)>/g) ?? [];
+      const joined = values
+        .map((raw) => decodePdfHexText(raw.slice(1, -1)))
+        .filter(Boolean)
+        .join(' ');
+      if (joined.trim()) chunks.push(joined.trim());
     }
     if (chunks.length >= 600) break;
   }
@@ -92,10 +137,14 @@ export async function runImageOcr(imageUri: string): Promise<string> {
         method: 'POST',
         body: form,
       });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const parsed = data?.ParsedResults?.[0]?.ParsedText as string | undefined;
-      if (parsed?.trim()) return normalizeSourceText(parsed);
+      if (res.ok) {
+        const data = await res.json();
+        const parsed = data?.ParsedResults?.[0]?.ParsedText as string | undefined;
+        if (parsed?.trim()) return normalizeSourceText(parsed);
+      }
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      }
     }
     return '';
   } catch {

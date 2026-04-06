@@ -27,6 +27,39 @@ export type EpisodeBookmark = {
   label: string;
 };
 
+function normalizeBookmarks(
+  raw: Record<string, EpisodeBookmark[] | number[] | undefined> | undefined
+): Record<string, EpisodeBookmark[]> {
+  if (!raw) return {};
+  const out: Record<string, EpisodeBookmark[]> = {};
+  for (const [episodeId, bookmarks] of Object.entries(raw)) {
+    const list = bookmarks ?? [];
+    out[episodeId] = list
+      .map((bookmark, index) => {
+        if (typeof bookmark === 'number') {
+          const seconds = Math.max(0, Math.round(bookmark));
+          return {
+            id: `legacy-${episodeId}-${index}-${seconds}`,
+            seconds,
+            label: `At ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
+          } satisfies EpisodeBookmark;
+        }
+        if (!bookmark || typeof bookmark !== 'object') return null;
+        const seconds = Math.max(0, Math.round((bookmark as EpisodeBookmark).seconds ?? 0));
+        const label = String((bookmark as EpisodeBookmark).label || '').trim()
+          || `At ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+        return {
+          id: String((bookmark as EpisodeBookmark).id || `bm-${episodeId}-${index}-${seconds}`),
+          seconds,
+          label,
+        } satisfies EpisodeBookmark;
+      })
+      .filter((item): item is EpisodeBookmark => Boolean(item))
+      .sort((a, b) => a.seconds - b.seconds);
+  }
+  return out;
+}
+
 type PlayerState = {
   currentEpisode:   Episode | null;
   isPlaying:        boolean;
@@ -157,7 +190,7 @@ export const usePlayerStore = create<PlayerState>()(
         set((state) => {
           const id = state.currentEpisode?.id;
           if (!id) return state;
-          const current = state.bookmarks[id] ?? [];
+          const current = normalizeBookmarks(state.bookmarks)[id] ?? [];
           const seconds = Math.round(state.positionSeconds);
           if (current.some((bookmark) => bookmark.seconds === seconds)) return state;
           const next = [
@@ -177,7 +210,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (!episodeId) return state;
           const nextLabel = label.trim();
           if (!nextLabel) return state;
-          const current = state.bookmarks[episodeId] ?? [];
+          const current = normalizeBookmarks(state.bookmarks)[episodeId] ?? [];
           return {
             bookmarks: {
               ...state.bookmarks,
@@ -192,7 +225,7 @@ export const usePlayerStore = create<PlayerState>()(
         set((state) => {
           const episodeId = state.currentEpisode?.id;
           if (!episodeId) return state;
-          const current = state.bookmarks[episodeId] ?? [];
+          const current = normalizeBookmarks(state.bookmarks)[episodeId] ?? [];
           return {
             bookmarks: {
               ...state.bookmarks,
@@ -232,6 +265,14 @@ export const usePlayerStore = create<PlayerState>()(
     {
       name: 'private-podcast-player-state',
       storage: createJSONStorage(() => AsyncStorage),
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState as Partial<PlayerState>) ?? {};
+        return {
+          ...currentState,
+          ...persisted,
+          bookmarks: normalizeBookmarks((persisted as any).bookmarks),
+        } as PlayerState;
+      },
       partialize: (state) => ({
         speed: state.speed,
         lastEpisodeId: state.lastEpisodeId,
