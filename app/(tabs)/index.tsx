@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated, Pressable, ScrollView,
   StyleSheet, Text, View, Dimensions,
@@ -7,6 +7,7 @@ import {
 import { useLibraryStore } from '../../src/stores/libraryStore';
 import { usePlayerStore } from '../../src/stores/playerStore';
 import { theme } from '../../src/constants/theme';
+import { uiSpacing, uiType } from '../../src/constants/ui';
 
 const { width } = Dimensions.get('window');
 const HEADER_HEIGHT = 160;
@@ -109,12 +110,25 @@ export default function HomeScreen() {
   const resumeByEpisode = usePlayerStore(st => st.resumeByEpisode);
   const screenAnim = useRef(new Animated.Value(0)).current;
   const scrollY    = useRef(new Animated.Value(0)).current;
+  const skeletonOpacity = useRef(new Animated.Value(0.35)).current;
+  const [showSkeleton, setShowSkeleton] = useState(true);
   const continueEpisode = episodes.find((item) => item.id === lastEpisodeId) ?? episodes[0];
 
   useEffect(() => {
     Animated.timing(screenAnim, {
       toValue: 1, duration: 350, useNativeDriver: true,
     }).start();
+  }, []);
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(skeletonOpacity, { toValue: 0.75, duration: 650, useNativeDriver: true }),
+        Animated.timing(skeletonOpacity, { toValue: 0.35, duration: 650, useNativeDriver: true }),
+      ])
+    ).start();
+    const timer = setTimeout(() => setShowSkeleton(false), 650);
+    return () => clearTimeout(timer);
   }, []);
 
   const headerTranslate = scrollY.interpolate({
@@ -193,7 +207,13 @@ export default function HomeScreen() {
           </Pressable>
         ) : null}
 
-        {episodes.length === 0 ? (
+        {showSkeleton ? (
+          <View style={s.list}>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Animated.View key={i} style={[s.skeletonCard, { opacity: skeletonOpacity }]} />
+            ))}
+          </View>
+        ) : episodes.length === 0 ? (
           <View style={s.empty}>
             <PulsingOrb />
             <Text style={s.emptyTitle}>No episodes yet</Text>
@@ -298,22 +318,23 @@ const s = StyleSheet.create({
                   flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   eyebrow:      { color: theme.primary, fontSize: 10, fontWeight: '700',
                   letterSpacing: 2.5, marginBottom: 6 },
-  headerTitle:  { color: theme.textPrimary, fontSize: 36, fontWeight: '800', lineHeight: 40 },
+  headerTitle:  { color: theme.textPrimary, fontSize: uiType.hero, fontWeight: '800', lineHeight: 40 },
   countWrap:    { alignItems: 'flex-end', paddingBottom: 4 },
   countNum:     { color: theme.primary, fontSize: 40, fontWeight: '800' },
   countLabel:   { color: theme.textSecondary, fontSize: 11, letterSpacing: 1 },
-  scrollContent:{ paddingHorizontal: 16, paddingBottom: 110 },
+  scrollContent:{ paddingHorizontal: uiSpacing.md, paddingBottom: 110 },
   scrollEmpty:  { flex: 1 },
   list:         { gap: 10 },
-  continueCard: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.divider, borderRadius: 16, padding: 14, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  continueCard: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.divider, borderRadius: 16, padding: uiSpacing.sm, marginBottom: uiSpacing.sm, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   continueLabel:{ color: theme.textSecondary, fontSize: 10, letterSpacing: 1.4, fontWeight: '700', marginBottom: 4 },
   continueTitle:{ color: theme.textPrimary, fontSize: 15, fontWeight: '700', maxWidth: width - 120 },
   continueMeta: { color: theme.primary, fontSize: 12, marginTop: 4, fontWeight: '600' },
   continueArrow:{ color: theme.primary, fontSize: 20, fontWeight: '700' },
   card:         { backgroundColor: theme.card, borderRadius: 18, flexDirection: 'row',
-                  alignItems: 'center', padding: 16, overflow: 'hidden',
+                  alignItems: 'center', padding: uiSpacing.md, overflow: 'hidden',
                   shadowColor: theme.shadowColor, shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  skeletonCard: { height: 82, borderRadius: 18, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.divider },
   cardAccent:   { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, borderRadius: 2 },
   artwork:      { width: 50, height: 50, borderRadius: 12,
                   alignItems: 'center', justifyContent: 'center',
@@ -337,8 +358,8 @@ const s = StyleSheet.create({
                   borderWidth: 1.5, borderColor: theme.primary + '60',
                   alignItems: 'center', justifyContent: 'center' },
   orbIcon:      { fontSize: 32 },
-  emptyTitle:   { color: theme.textPrimary, fontSize: 22, fontWeight: '800', marginBottom: 10 },
-  emptyBody:    { color: theme.textSecondary, fontSize: 14, textAlign: 'center',
+  emptyTitle:   { color: theme.textPrimary, fontSize: uiType.title, fontWeight: '800', marginBottom: 10 },
+  emptyBody:    { color: theme.textSecondary, fontSize: uiType.body, textAlign: 'center',
                   lineHeight: 22, marginBottom: 32 },
   glowBtn:      { borderRadius: 16, overflow: 'visible', alignItems: 'center',
                   justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 32,

@@ -6,6 +6,7 @@ import {
 import { usePlayerStore } from '../../src/stores/playerStore';
 import { useLibraryStore } from '../../src/stores/libraryStore';
 import { theme } from '../../src/constants/theme';
+import { uiSpacing, uiType } from '../../src/constants/ui';
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 const BAR_COUNT = 28;
@@ -340,16 +341,16 @@ const s = StyleSheet.create({
   header:       { backgroundColor: theme.background, paddingTop: 64,
                   paddingHorizontal: 24, paddingBottom: 20 },
   eyebrow:      { color: theme.primary, fontSize: 10, fontWeight: '700', letterSpacing: 2.5, marginBottom: 6 },
-  title:        { color: theme.textPrimary, fontSize: 36, fontWeight: '800' },
-  body:         { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 60, alignItems: 'center' },
+  title:        { color: theme.textPrimary, fontSize: uiType.hero, fontWeight: '800' },
+  body:         { paddingHorizontal: uiSpacing.lg, paddingTop: uiSpacing.xs, paddingBottom: 60, alignItems: 'center' },
   empty:        { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 48 },
   emptyOrb:     { width: 100, height: 100, borderRadius: 50,
                   backgroundColor: theme.primaryLight,
                   borderWidth: 1.5, borderColor: theme.primary + '40',
                   alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
   emptyIcon:    { fontSize: 40 },
-  emptyTitle:   { color: theme.textPrimary, fontSize: 22, fontWeight: '800', marginBottom: 10 },
-  emptyBody:    { color: theme.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  emptyTitle:   { color: theme.textPrimary, fontSize: uiType.title, fontWeight: '800', marginBottom: 10 },
+  emptyBody:    { color: theme.textSecondary, fontSize: uiType.body, textAlign: 'center', lineHeight: 22 },
   artwork:      { width: 220, height: 220, borderRadius: 32,
                   alignItems: 'center', justifyContent: 'center',
                   marginBottom: 24, position: 'relative',
